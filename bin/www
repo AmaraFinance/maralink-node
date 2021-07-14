@@ -1,0 +1,110 @@
+#!/usr/bin/env node
+const vorpal = require('vorpal')();
+const config = require('../config/config')
+const account = require('../library/account')
+let util = require('../util/util')
+let socket = require('../socket/server')
+let client = require('../socket/client')
+let levelDb = require('../db/levelDb')
+let queue = require('../library/queue')
+let peer = require('../core/peer')
+let blockChain = require('../core/blockChain')
+let listen = require('../core/listen')
+let mint = require('../core/mint')
+
+async function init() {
+    try {
+        //Init global variable
+        await initGlobal()
+
+        //Start http web3
+        await listen.initWeb3Http()
+
+        //Init transaction pool
+        let txPool = new queue.TxQueue()
+        global.TXPOOL = txPool
+
+        //Initialize account info
+        let initNode = await account.initNode()
+        if (!initNode) throw "[ERROR]: Init config err"
+
+        // Initialize the database
+        global.DATABASE = new levelDb()
+        let initBlock = await blockChain.initBlock()
+        if (!initBlock) throw "[ERROR]: Init database error"
+
+        //Start get peers list from cdn file
+        await peer.initVerifyPeer()
+        console.log(global.VERIFY_PEERS)
+
+        //Start socket server
+        let server = await socket.initTcpServer()
+        global.SOCKET_SERVER = server
+
+        //connect to seed peer
+        if (config.peers.seed.host) {
+            await client.initTcpClient(config.peers.seed.host, config.peers.seed.port, true)
+        } else {
+            if (global.VERIFY_PEERS.indexOf(global.NODE_ID) !== -1) {
+                global.NOW_VERIFY_PEER = global.NODE_ID
+            } else {
+                throw 'The genesis node must be a validator'
+            }
+            await mint.initMint()
+        }
+
+        // setInterval(function () {
+        //     console.log(Object.keys(global.SOCKET_LIST), global.SOCKET_SERVER.clients.size)
+        //     let a = []
+        //     global.SOCKET_SERVER.clients.forEach(ws => {
+        //         a.push(ws._socket.remoteAddress)
+        //     })
+        //     console.log(a)
+        //     console.log(global.VERIFY_ONLINE_PEERS)
+        // }, 5000)
+    } catch (e) {
+        util.log('err', e)
+        process.exit(0)
+    }
+}
+
+async function initGlobal() {
+    global.SOCKET_LIST = {};
+    global.SOCKET_SERVER = null;
+    global.DATABASE = null
+
+    global.NODE_INFO = {}
+    global.NODE_ID = null;
+
+
+    global.VERIFY_PEERS = []
+    global.VERIFY_ONLINE_PEERS = []
+    global.NOW_VERIFY_PEER = null
+    global.CYCLE_VOTE_PEER = {}
+    global.CYCLE_NUMBER = config.initBlock.BlockNumber
+
+    global.WEB3_WSS = null
+    global.WEB3_HTTP = null
+    global.WEB3_LISTEN = null
+
+    global.TXPOOL = null
+    global.TXPOOL_BROADCAST = null
+    global.BLOCK_SYNC = true
+    global.BLOCK_STRUCT = {
+        BlockNumber: "",
+        OriginContract: "",
+        TargetContract: "",
+        OriginTransactionHash: "",
+        From: "",
+        To: "",
+        Coin: "",
+        Amount: "",
+        Timestamp: "",
+        ParentHash: "",
+        Signature: "",
+        Node: ""
+    }
+}
+
+vorpal.use(require('../library/cli.js'));
+init()
