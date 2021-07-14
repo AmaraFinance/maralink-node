@@ -55,7 +55,7 @@ async function msgReplyBlock(ws, message) {
     let isValidBlock = await blockChain.isValidBlock(block)
     if (!isValidBlock) {
         util.log('err', `Sync block height ${block.BlockNumber} error. end client`)
-        ws.close()
+        process.exitCode = 1
     }
 
     await blockChain.writeBlock(block)

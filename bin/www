@@ -18,40 +18,42 @@ async function init() {
         await initGlobal()
 
         //Start http web3
-        await listen.initWeb3Http()
+        // await listen.initWeb3Http()
 
         //Init transaction pool
-        let txPool = new queue.TxQueue()
-        global.TXPOOL = txPool
+        // let txPool = new queue.TxQueue()
+        // global.TXPOOL = txPool
 
         //Initialize account info
-        let initNode = await account.initNode()
-        if (!initNode) throw "[ERROR]: Init config err"
+        // let initNode = await account.initNode()
+        // if (!initNode) throw "[ERROR]: Init config err"
 
         // Initialize the database
-        global.DATABASE = new levelDb()
-        let initBlock = await blockChain.initBlock()
-        if (!initBlock) throw "[ERROR]: Init database error"
+        // global.DATABASE = new levelDb()
+        // let initBlock = await blockChain.initBlock()
+        // if (!initBlock) throw "[ERROR]: Init database error"
 
         //Start get peers list from cdn file
+
         await peer.initVerifyPeer()
-        console.log(global.VERIFY_PEERS)
+        await peer.getCurrentRoundMaster()
+        // console.log(global.VERIFY_PEERS)
 
-        //Start socket server
-        let server = await socket.initTcpServer()
-        global.SOCKET_SERVER = server
+        // //Start socket server
+        // let server = await socket.initTcpServer()
+        // global.SOCKET_SERVER = server
 
-        //connect to seed peer
-        if (config.peers.seed.host) {
-            await client.initTcpClient(config.peers.seed.host, config.peers.seed.port, true)
-        } else {
-            if (global.VERIFY_PEERS.indexOf(global.NODE_ID) !== -1) {
-                global.NOW_VERIFY_PEER = global.NODE_ID
-            } else {
-                throw 'The genesis node must be a validator'
-            }
-            await mint.initMint()
-        }
+        // //connect to seed peer
+        // if (config.peers.seed.host) {
+        //     await client.initTcpClient(config.peers.seed.host, config.peers.seed.port, true)
+        // } else {
+        //     if (global.VERIFY_PEERS.indexOf(global.NODE_ID) !== -1) {
+        //         global.NOW_VERIFY_PEER = global.NODE_ID
+        //     } else {
+        //         throw 'The genesis node must be a validator'
+        //     }
+        //     await mint.initMint()
+        // }
 
         // setInterval(function () {
         //     console.log(Object.keys(global.SOCKET_LIST), global.SOCKET_SERVER.clients.size)
@@ -64,7 +66,7 @@ async function init() {
         // }, 5000)
     } catch (e) {
         util.log('err', e)
-        process.exit(0)
+        process.exit(1)
     }
 }
 
@@ -88,13 +90,13 @@ async function initGlobal() {
     global.WEB3_LISTEN = null
 
     global.TXPOOL = null
-    global.TXPOOL_BROADCAST = null
     global.BLOCK_SYNC = true
     global.BLOCK_STRUCT = {
         BlockNumber: "",
         OriginContract: "",
         TargetContract: "",
         OriginTransactionHash: "",
+        TargetTransactionHash: "",
         From: "",
         To: "",
         Coin: "",

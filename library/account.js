@@ -1,38 +1,42 @@
-const {hdkey} = require('ethereumjs-wallet')
-let ethUtil = require('ethereumjs-util');
-let bip39 = require('bip39');
-let config = require('../config/config')
 let util = require('../util/util')
-
+let ioUtil = require("./ioUtil");
+var ethers = require('ethers');
+var crypto = require('crypto');
 exports.initNode = async () => {
     let initNode = await this.InitNodeAccount()
     if (initNode) {
-        global.NODE_ID = initNode.address
-        global.NODE_INFO = initNode
+        global.NODE_ID = initNode.address;
+        global.NODE_INFO = initNode;
+        
         util.log('msg', initNode)
     }
     return initNode
 }
 
 exports.InitNodeAccount = async () => {
-    let mnemonic = config.mnemonic;
-    if (!mnemonic) return false;
+    let isExists=await ioUtil.fileExists("./pem");
+    if (isExists) {
+        try{
+            let content=await ioUtil.readFile("./pem");
+            content=JSON.parse(content);
+            return content;
+        }catch(ex){
+            throw new Error("error format pem file")
+        }
+    } else {
+        var id = crypto.randomBytes(32).toString('hex');
+        var privateKey = "0x" + id;
+        console.log("SAVE BUT DO NOT SHARE THIS:", privateKey);
 
-    let seed = bip39.mnemonicToSeedSync(mnemonic)
-    let hdWallet = hdkey.fromMasterSeed(seed)
-
-    let key = hdWallet.derivePath("m/44'/60'/0'/0/0")
-    let privateKey = ethUtil.bufferToHex(key._hdkey._privateKey);
-    let publicKey = ethUtil.bufferToHex(key._hdkey._publicKey);
-    let address = ethUtil.pubToAddress(key._hdkey._publicKey, true)
-
-    // address = ethUtil.toChecksumAddress(`0x${address.toString('hex')}`)
-    address = `0x${address.toString('hex')}`.toLowerCase()
-    return {
-        mnemonic: mnemonic,
-        privateKey: privateKey,
-        publicKey: publicKey,
-        address: address
+        var wallet = new ethers.Wallet(privateKey);
+        console.log("Address: " + wallet.address);
+        let result= {
+            privateKey: privateKey,
+            publicKey: wallet.publicKey,
+            address: wallet.address
+        }
+        await ioUtil.writeFile("./pem",JSON.stringify(result));
+        return result
     }
 }
 

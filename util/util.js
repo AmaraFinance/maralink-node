@@ -6,6 +6,15 @@ const abiDecoder = require('abi-decoder'); // NodeJS
 const config = require('../config/config')
 
 let util = {
+    raceHTTPGet: async function (urls) {
+        for (let index = 0; index < urls.length; index++) {
+            const url = urls[index];
+            let result = await this.httpGet(url);
+            if (result.success) {
+                return result
+            }
+        }
+    },
     httpGet: function (url) {
         return new Promise((resolve, reject) => {
             request.get({
@@ -97,10 +106,10 @@ let util = {
     log: function (type, info) {
         switch (type) {
             case "msg":
-                console.log(`[MSG]: `, info)
+                console.log(`${new Date().toLocaleString()} [MSG]: `, info)
                 break;
             case "err":
-                console.error(`[ERROR]: `, info)
+                console.error(`${new Date().toLocaleString()} [ERROR]: `, info)
                 break;
         }
     },
