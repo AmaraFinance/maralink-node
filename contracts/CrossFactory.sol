@@ -7,7 +7,6 @@ import "./SafeTRC20.sol";
 import "./Math.sol";
 import "./SchnorrVerifier.sol";
 import "./Schnorr.sol";
-import "./SafeTRC20.sol";
 import "./Curve.sol";
 import "./Search.sol";
 
@@ -21,15 +20,25 @@ contract CrossFactory is Ownable {
     uint public _chainId;
 
     address public _admin;
-    address[] nodeAddress;
-    
-    // mapping(address => mapping(uint => Data)) lockStores;
-    // mapping(address => mapping(uint => Data)) mintStores;
-    
+    uint private applyFactorMantisa = 0.5e18;
+    uint private constant mantisa = 1e18;
+
+    struct NodeItem{
+        uint256 publicKey;
+        address nodeAddress;
+    }
+
+    NodeItem[] public nodeList;
+
     event Cross2(CrossData data, string crossType);
     // event Cross(address fromToken, uint chainId, address targetToken, uint256 amount , address received, string crossType, bytes32 message);
     event Rescue(address indexed dst, uint sad);
     event RescueToken(address indexed dst,address indexed token, uint sad);
+
+    event AddNode(address nodeAddress_);
+    event DeleteNode(address nodeAddress_);
+
+    event NewApplyFactor(uint oldApplyFactorMantisa, uint applyFactorMantisa);
 
     struct CrossData {
         uint nonce;
@@ -58,7 +67,110 @@ contract CrossFactory is Ownable {
         _nonce = 0;
         _admin = admin;
         _chainId = chainId;
-        nodeAddress.push(admin);
+    }
+
+    function _setMinApplyFactorMantisa(uint newApplyFactorMantisa) public returns( bool ){
+        require(msg.sender == _admin, 'set must admin');
+        uint oldApplyFactorMantisa = applyFactorMantisa;
+        applyFactorMantisa = newApplyFactorMantisa;
+        emit NewApplyFactor(oldApplyFactorMantisa, applyFactorMantisa);
+    }
+
+    function getNodeList() view public returns (NodeItem[] memory){
+        return nodeList;
+    }
+
+
+    function addNodeItem(address nodeAddress_, uint256 publicKey) public returns(bool){
+        require(msg.sender == _admin, 'add must admin');
+        uint len = nodeList.length;
+        uint assetIndex = 0;
+        for (uint i = 0; i < len; i++) {
+            if (nodeList[i].nodeAddress == nodeAddress_) {
+                assetIndex = i;
+                break;
+            }
+        }
+
+        //is In or not
+        assert(assetIndex == 0);
+
+        NodeItem memory nodeItem = NodeItem({publicKey:publicKey, nodeAddress: nodeAddress_});
+        nodeList.push(nodeItem);
+
+        emit AddNode(nodeAddress_);
+        return true;
+    }
+
+    function deleteNodeItem(address nodeAddress_) public returns(bool){
+        require(msg.sender == _admin, 'delete must admin');
+        uint len = nodeList.length;
+        uint assetIndex = 0;
+        for (uint i = 0; i < len; i++) {
+            if (nodeList[i].nodeAddress == nodeAddress_) {
+                assetIndex = i;
+                break;
+            }
+        }
+
+        //is in or not
+        assert(assetIndex < len);
+
+        nodeList[assetIndex] = nodeList[len - 1];
+        nodeList.length--;
+
+        emit DeleteNode(nodeAddress_);
+        return true;
+    }
+
+
+    function filterNodeList() internal view returns (address[] memory){
+       
+        uint len = nodeList.length;
+        address[] memory nodeAddress = new address[](len);
+        for (uint i = 0; i < len; i++) {
+            nodeAddress[i] = nodeList[i].nodeAddress;
+        } 
+        return (nodeAddress);
+    }
+
+     function getPublicKeyByAddress(address nodeAddress_) public view returns (bool, uint256){
+        uint len = nodeList.length;
+        uint256 publicKey;
+        bool isExist = false;
+        for (uint i = 0; i < len; i++) {
+            if( nodeList[i].nodeAddress == nodeAddress_){
+                publicKey = nodeList[i].publicKey;
+                isExist = true;
+                break;
+            }
+        } 
+        return (isExist, publicKey);
+    }
+
+    function getPublicKeysByConfig(address[] memory nodeArr) public view returns (uint256[] memory){
+        uint len = nodeArr.length;
+        uint256[] memory publicKeys = new uint256[](len);
+        for (uint i = 0; i < len; i++) {
+           (bool isExist, uint256 publicKey) = getPublicKeyByAddress(nodeArr[i]);
+            if(isExist){
+                publicKeys[i] = publicKey;
+            }
+        } 
+        return (publicKeys);
+    }
+
+    function bytesToBytes32(bytes memory b, uint offset) internal pure returns (bytes32) {
+        bytes32 out;
+        for (uint i = 0; i < 32; i++) {
+          out |= bytes32(b[offset + i] & 0xFF) >> (i * 8);
+        }
+        return out;
+    }
+
+    function getCombinePubkey(address[] memory nodeArr) public view returns (uint256, uint256){
+        uint256[] memory publicKeys = getPublicKeysByConfig(nodeArr);
+        return SchnorrVerifier.getCombinePubkey(publicKeys);
     }
     
     
@@ -94,42 +206,35 @@ contract CrossFactory is Ownable {
         return true;
     } 
 
-
-    function bytesToBytes32(bytes memory b, uint offset) internal pure returns (bytes32) {
-        bytes32 out;
-        for (uint i = 0; i < 32; i++) {
-          out |= bytes32(b[offset + i] & 0xFF) >> (i * 8);
-        }
-        return out;
-    }
-
     /**
         verify signature
      */
-    function verifySign(bytes32 pkx, bytes32 message, bytes memory sign)
+    function verifySign(address[] memory nodeArr, bytes32 message, bytes memory sign)
     public view
     returns (bool){
         bytes32 r = bytesToBytes32(sign, 0);
         bytes32 s = bytesToBytes32(sign, 32);
-        
-        uint256 PKx = uint256(pkx);
-        
-        (uint256 bete, uint256 pky) = Curve.FindYforX(PKx);
-        bytes32 PKy = bytes32(pky);
-        
-        return SchnorrVerifier.verify(r, s, pkx, PKy, message);
-        
+        (uint256 px, ) = getCombinePubkey(nodeArr);
+        (uint256 bete, uint256 py) = Curve.FindYforX(px);
+        return SchnorrVerifier.verify(r, s, bytes32(px), bytes32(py), message);
     }
+
+   
     
-    function mint(bytes32 pkx, bytes32 message, bytes memory sign, address targetToken, uint amount, address received, uint fromChainId) public returns(bool success){
+    function mint(address[] memory nodeArr, bytes32 message, bytes memory sign, address targetToken, uint amount, address received, uint fromChainId) public returns(bool success){
         require(received != address(0x0));
         require(targetToken != address(0x0));
         require (amount > 0);
         
+        address[] memory nodeAddress = filterNodeList();
         bool isExist = Search.indexOfAddress(nodeAddress, msg.sender);
         require(isExist == true, 'address error');
+
+
+        require(nodeArr.length * mantisa > nodeList.length * applyFactorMantisa , 'apply number error');
+
         // step1 - verify first
-        bool res = verifySign(pkx, message, sign);
+        bool res = verifySign(nodeArr, message, sign);
         require(res == true,'sign error');
         // step2 - mint transfer
         ITRC20 tokenAddr = ITRC20(targetToken);
@@ -137,7 +242,7 @@ contract CrossFactory is Ownable {
 
 
         _nonce++;
-        crossData = CrossData(_nonce, fromChainId, _chainId, address(0), targetToken, amount, address(0), received, message, 2);
+        crossData = CrossData(_nonce, fromChainId, _chainId, address(0), targetToken, amount, msg.sender, received, message, 2);
         accountCrossList[received].lastCrossNonce = _nonce;
         accountCrossList[received].crossList.push(_nonce);
         allStoreList[_nonce] = crossData;
@@ -147,16 +252,6 @@ contract CrossFactory is Ownable {
 
         return true;
     }
-    
-    function setAddress(address[] memory _address) public returns(address[] memory){
-        nodeAddress = _address;
-        return nodeAddress;
-    }
-    
-    function getAddress() public view returns(address[] memory){
-        return nodeAddress;
-    }
-
     
    /**
     * @dev rescue simple transfered eth.

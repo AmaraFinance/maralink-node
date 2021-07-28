@@ -1,31 +1,9 @@
 const config = require('../config/config')
 const common = require("./util/common")
 let transaction = require('./transaction')
-let clientSocket = require('../socket/client')
 let util = require('../util/util')
 let listen = require('./listen')
-
-async function syncBlock(ws) {
-    try {
-        util.log('msg', 'Start sync block')
-        await clientSocket.send(ws, {
-            type: "SendBlockHeight",
-            data: {}
-        })
-    } catch (e) {
-        util.log('err', e)
-        return false
-    }
-}
-
-async function downloadBlock(ws, block) {
-    await clientSocket.send(ws, {
-        type: "GetBlock",
-        data: {
-            height: util.nextHex(block.BlockNumber)
-        }
-    })
-}
+let levelDb = require('../db/levelDb').getInstance()
 
 async function endSyncBlock() {
     let lastBlock = await global.DATABASE.getLastBlock()
@@ -87,57 +65,60 @@ async function initBlock() {
 async function writeBlock(data) {
     try {
         let block = util.structBlock(data)
-        let hashKey = common.hashKey(block.BlockNumber)
 
-        let isExisted = await global.DATABASE.get(hashKey)
-        if (isExisted) return true
+        let originHashKey = common.originHashKey(block.FromChainId, block.OriginTransactionHash)
+        let targetHashKey = common.targetHashKey(block.ToChainId, block.TargetTransactionHash)
 
-        let blockHash = util.getBlockHash(block)
-        if (!blockHash) return false
-        block.Hash = blockHash
-
-        let blockKey = common.blockKey(block.BlockNumber, block.Hash)
-        let numberKey = common.numberKey(block.Hash)
-        let originHashKey = common.originHashKey(block.OriginTransactionHash)
-
-        await global.DATABASE.batch([
+        await levelDb.batch([
             {type: "put", key: "LastBlock", value: JSON.stringify(block)},
-            {type: "put", key: blockKey, value: JSON.stringify(block)},
-            {type: "put", key: numberKey, value: block.BlockNumber},
-            {type: "put", key: hashKey, value: block.Hash},
+            {type: "put", key: originHashKey, value: JSON.stringify(block)},
             {
                 type: "put",
-                key: originHashKey,
-                value: JSON.stringify({Hash: block.Hash, BlockNumber: block.BlockNumber})
+                key: targetHashKey,
+                value: JSON.stringify({OriginTransactionHash: block.OriginTransactionHash, ChainId: block.FromChainId})
             }
         ])
-
-        util.log('msg', `Write new block of height ${block.BlockNumber}`)
-        return blockHash
+        util.log('msg', `Write new tx ${block.FromChainId}-${block.OriginTransactionHash} block ${JSON.stringify(block)}`)
+        return true
     } catch (e) {
         util.log('err', e)
         return false
     }
 }
 
-async function getBlockByNumber(number) {
+async function getTransactionByHash(chainId, hash) {
     try {
-        let hashKey = common.hashKey(number)
-        let hash = await global.DATABASE.get(hashKey)
-        let blockKey = common.blockKey(number, hash)
-        let block = await global.DATABASE.get(blockKey)
+        let hashKey = common.originHashKey(chainId, hash)
+        let tx = await levelDb.get(hashKey)
+        if (tx) return JSON.parse(tx)
 
-        return block ? JSON.parse(block) : null;
+        let targetHashKey = common.targetHashKey(chainId, hash)
+        let targetHash = await levelDb.get(targetHashKey)
+        if (!targetHash) return null
+
+        targetHash = JSON.parse(targetHash)
+        let originHashKey = common.originHashKey(targetHash.ChainId, targetHash.OriginTransactionHash)
+        tx = await levelDb.get(originHashKey)
+
+        return tx ? JSON.parse(tx) : null;
     } catch (e) {
         util.log('err', e)
         return null
     }
 }
 
-exports.syncBlock = syncBlock;
+async function getLastBlock() {
+    try {
+        let block = await levelDb.get("LastBlock")
+        return JSON.parse(block)
+    } catch (e) {
+        return false
+    }
+}
+
 exports.isValidBlock = isValidBlock;
-exports.downloadBlock = downloadBlock;
 exports.endSyncBlock = endSyncBlock;
 exports.initBlock = initBlock;
 exports.writeBlock = writeBlock;
-exports.getBlockByNumber = getBlockByNumber
+exports.getTransactionByHash = getTransactionByHash
+exports.getLastBlock = getLastBlock

@@ -44,15 +44,22 @@ let TaskList = class {
         task.uuid = task.uuid || uuidv4();
         task.type = task.type || 1;
         task.timeout = task.timeout || 10000;
+        if (task.timeoutHandle) {
+            clearTimeout(task.timeoutHandle)
+        }
         this.#list.push(task)
     }
 
     /**
      * Execute the next function on the queue for the matched elements fifo
      */
-    dequeue() {
+    dequeue(uuid) {
         let that = this;
-        let task = this.#list.shift();
+        if (uuid) {
+            var task = this.#list.findIndex((item) => item.uuid === uuid)
+        } else {
+            var task = this.#list.shift();
+        }
         if (!task) return false
 
         this.#pendingList.push(task);
@@ -66,38 +73,55 @@ let TaskList = class {
 
     resume(uuid) {
         let task = this.#pendingList.find((i) => i.uuid === uuid);
-        this.enqueue(task);
-        this.#pendingList = this.#pendingList.filter(item => item.uuid !== uuid);
+        if (task && task.hasOwnProperty('timeoutHandle') && task.timeoutHandle) clearTimeout(task.timeoutHandle)
+        if (task) {
+            this.enqueue(task);
+            this.#pendingList = this.#pendingList.filter(item => item.uuid !== uuid);
+        }
     }
 
     pendingList() {
         return this.#pendingList
     }
 
-    update(task) {
-        let taskIndex = this.#pendingList.findIndex((i) => i.uuid === task.uuid);
-        if (taskIndex !== -1) {
-            this.#pendingList = this.#pendingList.filter(item => item.uuid !== task.uuid);
-            this.#pendingList.push(task)
-        }
+    update(uuid, options) {
+        let pendTask = this.#pendingList.find((i) => i.uuid === uuid);
+        let listTask = this.#list.find((i) => i.uuid === uuid);
 
-        taskIndex = this.#list.findIndex((i) => i.uuid === task.uuid);
-        if (taskIndex !== -1) {
-            this.#list = this.#list.filter(item => item.uuid !== task.uuid);
-            this.#list.push(task)
-        }
+        Object.keys(options).forEach((k) => {
+            if (pendTask) {
+                pendTask[k] = options[k]
+            }
+            if (listTask) {
+                listTask[k] = options[k]
+            }
+        })
     }
 
     find(filters) {
         const filterKeys = Object.keys(filters)
-        return this.#pendingList.filter((item) => {
+        let findArr = this.#list.filter((item) => {
             return filterKeys.every(key => {
-                return filters[key].indexOf(item[key]) !== -1
+                return filters[key].toString().indexOf(item[key]) !== -1
             })
         })
+        if (findArr.length > 0) return findArr[0]
+
+        findArr = this.#pendingList.filter((item) => {
+            return filterKeys.every(key => {
+                return filters[key].toString().indexOf(item[key]) !== -1
+            })
+        })
+        return findArr.length > 0 ? findArr[0] : null
     }
 
     remove(uuid) {
+        let pendTask = this.#pendingList.find((i) => i.uuid === uuid);
+        if (pendTask && pendTask.hasOwnProperty('timeoutHandle') && pendTask.timeoutHandle) clearTimeout(pendTask.timeoutHandle)
+
+        let listTask = this.#list.find((i) => i.uuid === uuid);
+        if (listTask && listTask.hasOwnProperty('timeoutHandle') && listTask.timeoutHandle) clearTimeout(listTask.timeoutHandle)
+
         this.#pendingList = this.#pendingList.filter(item => item.uuid !== uuid);
         this.#list = this.#list.filter(item => item.uuid !== uuid);
     }

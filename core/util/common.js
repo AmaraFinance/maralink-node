@@ -2,7 +2,8 @@
 let blockPrefix = "b", // blockPrefix + num + hash -> block
     numberPrefix = "n", // numberPrefix + hash -> number
     hashPrefix = "h", // hashPrefix + number -> hash
-    originHashPrefix = "o"  // originHashPrefix + originHash -> hash + number
+    originHashPrefix = "o",  // originHashPrefix + originHash -> hash + number
+    targetHashPrefix = "t"  // originHashPrefix + originHash -> hash + number
 
 let common = {
     blockKey: function (number, hash) {
@@ -17,8 +18,12 @@ let common = {
         return [hashPrefix, number];
     },
 
-    originHashKey: function (originHash) {
-        return [originHashPrefix, originHash];
+    originHashKey: function (chainId, originHash) {
+        return [originHashPrefix, chainId, originHash];
+    },
+
+    targetHashKey: function (chainId, hash) {
+        return [targetHashPrefix, chainId, hash];
     }
 }
 

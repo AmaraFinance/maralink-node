@@ -1,5 +1,4 @@
 const config = require('../config/config')
-let clientSocket = require('../socket/client')
 let util = require('../util/util')
 
 async function findNewTransaction(hash, notBroadcast) {

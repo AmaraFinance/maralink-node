@@ -14,6 +14,7 @@ library SchnorrVerifier {
         uint256 x; uint256 y;
     }
     uint256 constant n = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F;
+
     struct Verification {
         Point groupKey;
         Point randomPoint;
@@ -115,6 +116,42 @@ library SchnorrVerifier {
 
         (uint256 x, uint256 y) =  cadd(sG.x, sG.y, ePng.x, ePng.y);
         return Point(x, y);
+    }
+
+    function writeUInt32LE(uint idx) pure internal returns (bytes memory){
+        bytes memory result = new bytes(4);
+        for(uint i = 0; i < 4; i++) {
+            result[i] = byte(uint8(idx / (2**(8*(i))))); 
+        }
+        return result;
+    }
+
+
+    function computeCoefficient(uint256 ell, uint256 idx) view public returns (uint256){
+        uint256 taghash = uint256(sha256(abi.encodePacked('MuSig coefficient')));
+        bytes memory bdx = writeUInt32LE(idx);
+        return uint256(sha256(abi.encodePacked(taghash, taghash, ell, bdx))) % n;
+    }
+
+  
+
+    function getCombinePubkey(uint256[] memory publicKeys) public view returns (uint256 , uint256){
+       
+        uint256 ell = uint256(sha256(abi.encodePacked(publicKeys))) % n;
+        uint256 x;
+        uint256 y;
+        for(uint i=0; i < publicKeys.length; i++ ){
+            uint256 coefficient = computeCoefficient(ell, i);
+            (, uint256 py) = Curve.FindYforX(publicKeys[i]);
+            (uint256 tempx, uint256 tempy) = cmul( publicKeys[i],  py, coefficient);
+            if( i == 0 ){
+                x = tempx;
+                y = tempy;
+            }else{
+                (x, y) = cadd(x, y, tempx, tempy);
+            }
+        }
+        return (x, y);
     }
 
     function verify(bytes32 rr, bytes32 ss, bytes32 groupKeyX, bytes32 groupKeyY, bytes32 message)

@@ -11,20 +11,19 @@ let Watcher = class {
     constructor(parent, accountInfo) {
         this._parent = parent
         this._account = accountInfo
+        for (let v of api) {
+            if ('[object Function]' == Object.prototype.toString.call(v)) {
+                let watcher = new v(this._parent, this, this._account);
+                this.listeners[watcher.chainId] = watcher;
+            }
+        }
     }
 
-    loadAllListener() {
-        try {
-            for (let v of api) {
-                if ('[object Function]' == Object.prototype.toString.call(v)) {
-                    let watcher = new v(this._parent, this, this._account);
-                    this.listeners[watcher.chainId] = watcher;
-                    // this.listeners.push(watcher)
-                }
-            }
-        } catch (e) {
-            console.log(e)
+    static getInstance(parent, accountInfo) {
+        if (!this.instance) {
+            this.instance = new Watcher(parent, accountInfo);
         }
+        return this.instance;
     }
 }
 

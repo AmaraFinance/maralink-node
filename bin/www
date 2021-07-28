@@ -1,21 +1,14 @@
 #!/usr/bin/env node
 const vorpal = require('vorpal')();
 const config = require('../config/config')
-const account = require('../library/account')
 let util = require('../util/util')
-let socket = require('../socket/server')
-let client = require('../socket/client')
-let levelDb = require('../db/levelDb')
-let queue = require('../library/queue')
 let peer = require('../core/peer')
-let blockChain = require('../core/blockChain')
-let listen = require('../core/listen')
-let mint = require('../core/mint')
+let Node = require('../core/node')
 
 async function init() {
     try {
         //Init global variable
-        await initGlobal()
+        // await initGlobal()
 
         //Start http web3
         // await listen.initWeb3Http()
@@ -35,9 +28,11 @@ async function init() {
 
         //Start get peers list from cdn file
 
-        await peer.initVerifyPeer()
-        await peer.getCurrentRoundMaster()
-        // console.log(global.VERIFY_PEERS)
+        let node = new Node()
+        await node.initVerifyPeer()
+        // await peer.initVerifyPeer()
+        // await peer.getCurrentRoundMaster()
+        // console.log(global.VERIFY_PEERS
 
         // //Start socket server
         // let server = await socket.initTcpServer()
@@ -70,43 +65,28 @@ async function init() {
     }
 }
 
-async function initGlobal() {
-    global.SOCKET_LIST = {};
-    global.SOCKET_SERVER = null;
-    global.DATABASE = null
-
-    global.NODE_INFO = {}
-    global.NODE_ID = null;
-
-
-    global.VERIFY_PEERS = []
-    global.VERIFY_ONLINE_PEERS = []
-    global.NOW_VERIFY_PEER = null
-    global.CYCLE_VOTE_PEER = {}
-    global.CYCLE_NUMBER = config.initBlock.BlockNumber
-
-    global.WEB3_WSS = null
-    global.WEB3_HTTP = null
-    global.WEB3_LISTEN = null
-
-    global.TXPOOL = null
-    global.BLOCK_SYNC = true
-    global.BLOCK_STRUCT = {
-        BlockNumber: "",
-        OriginContract: "",
-        TargetContract: "",
-        OriginTransactionHash: "",
-        TargetTransactionHash: "",
-        From: "",
-        To: "",
-        Coin: "",
-        Amount: "",
-        Timestamp: "",
-        ParentHash: "",
-        Signature: "",
-        Node: ""
-    }
-}
+// async function initGlobal() {
+//     global.SOCKET_LIST = {};
+//     global.SOCKET_SERVER = null;
+//     global.DATABASE = null
+//
+//     global.NODE_INFO = {}
+//     global.NODE_ID = null;
+//
+//
+//     global.VERIFY_PEERS = []
+//     global.VERIFY_ONLINE_PEERS = []
+//     global.NOW_VERIFY_PEER = null
+//     global.CYCLE_VOTE_PEER = {}
+//     global.CYCLE_NUMBER = config.initBlock.BlockNumber
+//
+//     global.WEB3_WSS = null
+//     global.WEB3_HTTP = null
+//     global.WEB3_LISTEN = null
+//
+//     global.TXPOOL = null
+//     global.BLOCK_SYNC = true
+// }
 
 vorpal.use(require('../library/cli.js'));
 init()

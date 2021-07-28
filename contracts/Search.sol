@@ -11,7 +11,7 @@ library Search {
         return uint(-1);
     }
     
-    function indexOfAddress(address[] storage self, address value)
+    function indexOfAddress(address[] memory self, address value)
         public
         view
         returns (bool)

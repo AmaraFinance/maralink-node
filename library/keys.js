@@ -35,7 +35,6 @@ function genKeys() {
 
         let res = account.createAccount();
 
-        // 出错了 写逻辑
         // let res = {
         //   privateKey: keypair.getPrivate('hex').toString(),
         //   pub: keypair.getPublic('hex').toString()

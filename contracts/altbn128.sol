@@ -104,6 +104,10 @@ library Curve {
         
         uint256 y = expMod(beta, CURVE_A, FIELD_ORDER);
 
+		if(y % 2 != 0){
+			y = (FIELD_ORDER - y) % FIELD_ORDER;
+		}
+
         return (beta, y);
     }
 

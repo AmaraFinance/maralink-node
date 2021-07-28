@@ -4,7 +4,21 @@ const BN = require('bn.js')
 const request = require('request')
 const abiDecoder = require('abi-decoder'); // NodeJS
 const config = require('../config/config')
-
+const structBlock = {
+    OriginContract: "",
+    TargetContract: "",
+    TargetToken: "",
+    OriginTransactionHash: "",
+    TargetTransactionHash: "",
+    FromChainId: "",
+    ToChainId: "",
+    From: "",
+    To: "",
+    Amount: "",
+    Timestamp: "",
+    Signature: "",
+    Node: ""
+}
 let util = {
     raceHTTPGet: async function (urls) {
         for (let index = 0; index < urls.length; index++) {
@@ -70,8 +84,8 @@ let util = {
 
     structBlock: function (data) {
         let block = {}
-        for (let i of Object.keys(global.BLOCK_STRUCT)) {
-            block[i] = data.hasOwnProperty(i) ? data[i] : global.BLOCK_STRUCT[i]
+        for (let i of Object.keys(structBlock)) {
+            block[i] = data.hasOwnProperty(i) ? data[i] : structBlock[i]
         }
         return block
     },
@@ -91,11 +105,11 @@ let util = {
         }
     },
 
-    decodeInput: function (inputData) {
+    decodeInput: function (inputData, abi) {
         try {
-            abiDecoder.addABI(config.originContractAbi);
-            let decodedData = abiDecoder.decodeMethod(inputData);
-            abiDecoder.removeABI(config.originContractAbi)
+            abiDecoder.addABI(abi);
+            const decodedData = abiDecoder.decodeMethod(inputData);
+            abiDecoder.removeABI(abi)
             return decodedData ? decodedData : false
         } catch (e) {
             console.error(e)
@@ -136,16 +150,6 @@ let util = {
         let number = new BN(str, 10)
         let next = number.addn(1)
         return next.toString(10)
-    },
-
-    checkExistedNode: function (nodeId) {
-        if (global.SOCKET_LIST.hasOwnProperty(nodeId)) {
-            return true
-        }
-        global.SOCKET_SERVER.clients.forEach(ws => {
-            if (ws.nodeId === nodeId) return true;
-        })
-        return false
     }
 }
 
