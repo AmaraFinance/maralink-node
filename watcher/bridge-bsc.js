@@ -12,12 +12,12 @@ if (process.env.NODE_ENV === 'production') {
     }
 } else {
     var chainConfig = {
-        contractAddress: "0x2D367dEab3cBd33e21ed0C4468f260C39025FbcA",
-        chainAddress: "https://data-seed-prebsc-2-s1.binance.org:8545/",
+        contractAddress: "0xC169423A105e290F9beE1588773a1C292D2b5D16",
+        chainAddress: "https://data-seed-prebsc-1-s3.binance.org:8545/",
         tokenList: [
             {
-                address: "0x4E5e53025a5d09c16F8cDC776A64906D8D121548",
-                decimals: 18,
+                address: "0xE3E399Ce433CA06d3A12d8acC3651d90B43E898B",
+                decimals: 8,
                 symbol: "LL"
             }
         ]
@@ -79,7 +79,6 @@ let Watcher = class {
     }
 
     async #handlerLockTx(data, event) {
-        util.log('msg', `${this.chainName} Get new transaction. crossChain: ${data.fromChainId}-${data.toChainId} hash: ${event.transactionHash}`)
         let toChainWatcher = this._parent.listeners[data.toChainId];
         let amount = await this.#getAmount(data.amount, data.fromToken, data.targetToken, data.toChainId)
         if (!amount) throw new Error(`Conversion quantity failed`)
@@ -99,7 +98,12 @@ let Watcher = class {
             type: 2
         }
 
+        let currentRoundMaster = await this._leader.getCurrentRoundMaster()
+        if (!currentRoundMaster || currentRoundMaster[0].peer.toLowerCase() !== this._account.address.substr(2).toLowerCase()) return false
+
+        util.log('msg', `${this.chainName} Get new transaction. crossChain: ${data.fromChainId}-${data.toChainId} hash: ${event.transactionHash}`)
         util.log('msg', newTransaction)
+        await blockChain.writeTempBlock(newTransaction)
         this._leader.taskController.enqueue(newTransaction)
     }
 
@@ -112,36 +116,8 @@ let Watcher = class {
             transactionHash: data.message
         })
         if (!task) return false
-        this._leader.taskController.update(task, {done: true})
-        this._leader.taskController.remove(task.uuid)
         util.log('msg', `${this.chainName} remove task uuid ${task.uuid}`)
-
-        //write to database
-        let block = {
-            OriginContract: task.fromContract,
-            TargetContract: task.targetContract,
-            TargetToken: task.targetToken,
-            OriginTransactionHash: data.message,
-            TargetTransactionHash: event.transactionHash,
-            FromChainId: task.fromChainId,
-            ToChainId: task.toChainId,
-            From: task.fromAddress,
-            To: task.toAddress,
-            Amount: task.amount,
-            Timestamp: Date.now(),
-            Node: data.fromAddress
-        }
-        await blockChain.writeBlock(block)
-
-        //broadcast to others peer
-        await this._leader.newServer.broadcast({
-            type: "sureTx",
-            data: {
-                targetHash: event.transactionHash,
-                fromChainId: data.fromChainId,
-                toChainId: data.toChainId
-            }
-        })
+        await this.recordAndBroadcastTask(task)
     }
 
     async #getAmount(amount, fromAddress, toAddress, toChainId) {
@@ -208,7 +184,7 @@ let Watcher = class {
                 publicKey: this._account.publicKey
             })
 
-            let sign = await this._leader.newServer.signTransaction(peerList, tx.transactionHash)
+            let sign = await this._leader.newServer.signTransaction(peerList, tx.transactionHash, this.chainId)
             if (!sign) throw new Error(`Sign error hash: ${tx.transactionHash}`)
             let result = await this.contract.mint(sign.addressArr, sign.message, sign.signature, tx.targetToken, tx.amount, tx.toAddress, tx.fromChainId)
             return result.hash
@@ -216,6 +192,38 @@ let Watcher = class {
             util.log('err', `${this.chainName} sendToContract ${e}`)
             return false;
         }
+    }
+
+    async recordAndBroadcastTask(task) {
+        //remove from taskList
+        this._leader.taskController.remove(task.uuid)
+
+        //write to database
+        let block = {
+            OriginContract: task.fromContract,
+            TargetContract: task.targetContract,
+            TargetToken: task.targetToken,
+            OriginTransactionHash: task.transactionHash,
+            TargetTransactionHash: task.targetHash,
+            FromChainId: task.fromChainId,
+            ToChainId: task.toChainId,
+            From: task.fromAddress,
+            To: task.toAddress,
+            Amount: task.amount,
+            Timestamp: Date.now(),
+            Node: this._account.address
+        }
+        await blockChain.writeBlock(block)
+
+        //broadcast to others peer
+        // await this._leader.newServer.broadcast({
+        //     type: "sureTx",
+        //     data: {
+        //         targetHash: task.targetHash,
+        //         fromChainId: task.fromChainId,
+        //         toChainId: task.toChainId
+        //     }
+        // })
     }
 }
 

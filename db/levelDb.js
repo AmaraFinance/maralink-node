@@ -55,6 +55,33 @@ let LevelDb = class {
             return false
         }
     }
+
+    async getMatchKeyList(key, limit) {
+        try {
+            let that = this
+            let arr = []
+            return new Promise(function (resolve, reject) {
+                that.db.createReadStream({
+                    gte: key,
+                    limit: limit || 1
+                })
+                    .on('data', function (data) {
+                        if (data.key.indexOf(key) !== -1) arr.push(data)
+                    })
+                    .on('error', function (err) {
+                        resolve(null)
+                    })
+                    .on('close', function () {
+                        resolve(arr)
+                    })
+                    .on('end', function () {
+                        resolve(arr)
+                    })
+            })
+        } catch (e) {
+            return null
+        }
+    }
 }
 
 module.exports = LevelDb

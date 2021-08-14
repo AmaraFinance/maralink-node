@@ -69,6 +69,7 @@ let TaskList = class {
                 that.resume(task.uuid)
             }
         }, task.timeout);
+        return true
     }
 
     resume(uuid) {

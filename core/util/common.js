@@ -1,29 +1,33 @@
-// const Buffer = require('buffer')
-let blockPrefix = "b", // blockPrefix + num + hash -> block
-    numberPrefix = "n", // numberPrefix + hash -> number
-    hashPrefix = "h", // hashPrefix + number -> hash
-    originHashPrefix = "o",  // originHashPrefix + originHash -> hash + number
-    targetHashPrefix = "t"  // originHashPrefix + originHash -> hash + number
-
 let common = {
+    blockPrefix: "block", // blockPrefix + num + hash -> block
+    numberPrefix: "number", // numberPrefix + hash -> number
+    hashPrefix: "hash", // hashPrefix + number -> hash
+    originHashPrefix: "originHash",  // originHashPrefix + originHash -> hash + number
+    targetHashPrefix: "targetHash",  // originHashPrefix + originHash -> hash + number
+    tempTxPrefix: "tempTx",
+
     blockKey: function (number, hash) {
-        return [blockPrefix, number, hash];
+        return [this.blockPrefix, number, hash];
     },
 
     numberKey: function (hash) {
-        return [numberPrefix, hash];
+        return [this.numberPrefix, hash];
     },
 
     hashKey: function (number) {
-        return [hashPrefix, number];
+        return [this.hashPrefix, number];
     },
 
     originHashKey: function (chainId, originHash) {
-        return [originHashPrefix, chainId, originHash];
+        return [this.originHashPrefix, chainId, originHash];
     },
 
     targetHashKey: function (chainId, hash) {
-        return [targetHashPrefix, chainId, hash];
+        return [this.targetHashPrefix, chainId, hash];
+    },
+
+    tempHashKey: function (chainId, hash) {
+        return [this.tempTxPrefix, chainId, hash];
     }
 }
 

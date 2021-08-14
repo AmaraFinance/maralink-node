@@ -5,11 +5,11 @@ let TaskList = require("../library/tasklist");
 let Socket = require("../network/socket/socket")
 let Watcher = require('../watcher/index');
 let HttpServer = require('../network/http/http')
+let blockChain = require("./blockChain")
 let taskController = new TaskList(1);
 let watcher = null
 let newServer = null
 let MintStatus = false
-let CurrentMine = false
 
 class Node {
     neighbours = {};
@@ -39,9 +39,45 @@ class Node {
         //http
         HttpServer.getInstance(this)
 
+        // Init temp task
+        await this.initTempTask()
+
         setInterval(() => {
-            this.startMint(this.accountInfo)
-        }, 500)
+            this.taskController.dequeue()
+        }, 1000)
+    }
+
+    async initTempTask() {
+        try {
+            let tempList = await blockChain.getTempBlockList()
+            tempList.forEach((item, key) => {
+                let task = JSON.parse(item.value)
+                if (task.done || task.targetHash) {
+                    this.handleSubmittedTx(task)
+                } else {
+                    this.taskController.enqueue(task)
+                }
+            })
+        } catch (e) {
+            util.log('err', e)
+        }
+    }
+
+    async handleSubmittedTx(task) {
+        try {
+            if (!watcher.listeners.hasOwnProperty(task.toChainId)) return false
+            let bridge = watcher.listeners[task.toChainId]
+            let tx = await bridge.getTransaction(task.targetHash)
+            if (tx) {
+                await bridge.recordAndBroadcastTask(task)
+            } else {
+                task.done = false
+                task.targetHash = null
+                this.taskController.enqueue(task)
+            }
+        } catch (e) {
+            util.log('err', e)
+        }
     }
 
     async getCurrentRoundMaster() {
@@ -109,71 +145,30 @@ class Node {
         return round
     }
 
-    async startMint(account) {
-        try {
-            if (MintStatus) {
-                return false
-            }
-
-            let currentRoundMaster = await this.getCurrentRoundMaster()
-            if (!currentRoundMaster) {
-                MintStatus = false
-                return false
-            }
-
-            currentRoundMaster = currentRoundMaster[0]
-            if (currentRoundMaster.peer.toLowerCase() !== account.address.substr(2).toLowerCase()) {
-                MintStatus = false
-                if (CurrentMine === true) {
-                    util.log('msg', `Mine end mint`)
-                    CurrentMine = false
-                }
-                return false
-            } else {
-                if (CurrentMine === false) {
-                    util.log('msg', `Mine start mint`)
-                    CurrentMine = true
-                }
-            }
-
-            MintStatus = true
-
-            let res = this.taskController.dequeue()
-            if (!res) {
-                MintStatus = false
-            }
-
-            return true
-        } catch (e) {
-            util.log('err', e)
-            return false
-        }
-    }
-
     /**
      * call contract function if watcher get transcation info
      * @param {*} params
      */
     async sendToContract(task) {
         try {
-            if (!task) {
-                MintStatus = false
-                return false
-            }
-            if (task.done) {
-                MintStatus = false
-                return false
-            }
+            if (!task) throw new Error(`Not found task`)
+            if (task.done || task.targetHash) throw new Error(`Task submitted uuid: ${task.uuid} targetHash: ${task.targetHash}`)
+
             switch (task.type) {
                 case 1:
                     //Execute p2p task
                     break;
                 case 2:
+                    util.log('msg', `Start processing task. uuid:${task.uuid}. transactionHash: ${task.transactionHash}. fromChainId:${task.fromChainId}. toChainId:${task.toChainId}`)
                     if (!watcher || !watcher.listeners.hasOwnProperty(task.toChainId)) return taskController.resume(task.uuid)
                     let hash = await watcher.listeners[task.toChainId].sendToContract(task)
                     if (!hash) return taskController.resume(task.uuid)
 
-                    taskController.update(task.uuid, {targetHash: hash})
+                    taskController.update(task.uuid, {targetHash: hash, done: true})
+                    await blockChain.updateTempBlock(task.fromChainId, task.transactionHash, {
+                        targetHash: hash,
+                        done: true
+                    })
                     await newServer.broadcast({
                         type: "sentTx",
                         data: {
@@ -191,7 +186,7 @@ class Node {
                             targetHash: hash
                         }
                     })
-                    util.log('msg', `uuid: ${task.uuid} hash: ${hash}`)
+                    util.log('msg', `Task uuid: ${task.uuid} hash: ${hash}`)
                     break;
             }
             MintStatus = false

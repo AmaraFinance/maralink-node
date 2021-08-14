@@ -68,8 +68,10 @@ async function writeBlock(data) {
 
         let originHashKey = common.originHashKey(block.FromChainId, block.OriginTransactionHash)
         let targetHashKey = common.targetHashKey(block.ToChainId, block.TargetTransactionHash)
+        let tempTxKey = common.tempHashKey(block.FromChainId, block.OriginTransactionHash)
 
         await levelDb.batch([
+            {type: "del", key: tempTxKey},
             {type: "put", key: "LastBlock", value: JSON.stringify(block)},
             {type: "put", key: originHashKey, value: JSON.stringify(block)},
             {
@@ -80,6 +82,46 @@ async function writeBlock(data) {
         ])
         util.log('msg', `Write new tx ${block.FromChainId}-${block.OriginTransactionHash} block ${JSON.stringify(block)}`)
         return true
+    } catch (e) {
+        util.log('err', e)
+        return false
+    }
+}
+
+async function writeTempBlock(data) {
+    try {
+        let tempTxKey = common.tempHashKey(data.fromChainId, data.transactionHash)
+        await levelDb.batch([
+            {type: "put", key: tempTxKey, value: JSON.stringify(data)},
+        ])
+        return true
+    } catch (e) {
+        util.log('err', e)
+        return false
+    }
+}
+
+async function updateTempBlock(chainId, hash, params) {
+    try {
+        let tempTxKey = common.tempHashKey(chainId, hash)
+        let task = await levelDb.get(tempTxKey)
+        if (!task) return false
+
+        task = JSON.parse(task)
+        for (let i in params) {
+            task[i] = params[i]
+        }
+        await levelDb.put(tempTxKey, JSON.stringify(task))
+        return true
+    } catch (e) {
+        util.log('err', e)
+        return false
+    }
+}
+
+async function getTempBlockList() {
+    try {
+        return await levelDb.getMatchKeyList(common.tempTxPrefix, -1)
     } catch (e) {
         util.log('err', e)
         return false
@@ -120,5 +162,8 @@ exports.isValidBlock = isValidBlock;
 exports.endSyncBlock = endSyncBlock;
 exports.initBlock = initBlock;
 exports.writeBlock = writeBlock;
+exports.writeTempBlock = writeTempBlock;
+exports.updateTempBlock = updateTempBlock;
+exports.getTempBlockList = getTempBlockList;
 exports.getTransactionByHash = getTransactionByHash
 exports.getLastBlock = getLastBlock

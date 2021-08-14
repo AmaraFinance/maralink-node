@@ -160,13 +160,16 @@ let Socket = class {
     async #msgGetTxSignNonce(socket, parameter, callback) {
         try {
             let that = this
-            let {addressArr, hash, idx} = parameter.data
+            let {addressArr, hash, chainId, idx} = parameter.data
             if (!addressArr) {
-                callback && callback('Node verification failed ${hash}', null)
+                callback && callback(`Node verification failed. ${hash}`, null)
             }
             let newPeerList = await this.verifyPeer(addressArr)
             if (!newPeerList) {
-                callback && callback('Node verification failed ${hash}', null)
+                callback && callback(`Node verification failed. ${hash}`, null)
+            }
+            if (await blockChain.getTransactionByHash(chainId, hash)) {
+                callback && callback(`Transaction is existed. hash ${hash}`, null)
             }
 
             //step 1 combine public keys
@@ -176,7 +179,7 @@ let Socket = class {
             }
             let publicData = schnorrSign.publicKeyCombine(pubKeys)
             if (!publicData) {
-                callback && callback('Combined public key failed ${hash}', null)
+                callback && callback(`Combined public key failed. ${hash}`, null)
             }
 
             //step2 Create the private signing session
@@ -187,17 +190,18 @@ let Socket = class {
                 pubKeyHash: publicData.pubKeyHash
             }, idx, this._account.privateKey)
             if (!sign) {
-                callback && callback(`Sign tx error ${hash}`, null)
+                callback && callback(`Sign tx error. ${hash}`, null)
             }
             let newSign = {
                 nonce: sign.nonce,
                 commitment: sign.commitment
             }
-            this._tempTx[`${socket.nodeId}_${hash}`] = {
+            let tempName = `${socket.nodeId}_${hash}_${chainId}`
+            this._tempTx[tempName] = {
                 publicData: publicData,
                 session: sign,
                 timeout: setTimeout(() => {
-                    delete that._tempTx[`${socket.nodeId}_${hash}`]
+                    delete that._tempTx[tempName]
                 }, 30 * 1000)
             }
 
@@ -210,14 +214,16 @@ let Socket = class {
 
     async #msgGetTxSign(socket, parameter, callback) {
         try {
-            let {hash, nonceCombined} = parameter.data
-            if (!this._tempTx.hasOwnProperty(`${socket.nodeId}_${hash}`)) {
+            let {hash, nonceCombined, combinedNonceParity, chainId} = parameter.data
+            let tempName = `${socket.nodeId}_${hash}_${chainId}`
+            if (!this._tempTx.hasOwnProperty(tempName)) {
                 callback && callback('Not match temp tx', null)
             }
 
-            let tempData = this._tempTx[`${socket.nodeId}_${hash}`]
+            let tempData = this._tempTx[tempName]
             let publicData = tempData.publicData
             let session = tempData.session
+            session.combinedNonceParity = combinedNonceParity
 
             let partialSignature = schnorrSign.getPartialSignature(session, soltypes.Bytes32.from(hash).toBuffer(), nonceCombined, publicData.pubKeyCombined);
             if (partialSignature) {
@@ -265,7 +271,7 @@ let Socket = class {
                     })
                 } else {
                     let sockets = await this.findClient(v)
-                    if (!sockets.server || !sockets.client) throw  new Error(`Verify that the node is not connected`)
+                    if (!sockets.server || !sockets.client) throw new Error(`Verify that the node is not connected`)
                     newPeerList.push({
                         address: v,
                         publicKey: sockets.server.publicKey
@@ -344,7 +350,7 @@ let Socket = class {
         }
     }
 
-    async signTransaction(peerList, hash) {
+    async signTransaction(peerList, hash, chainId) {
         try {
             let addressArr = peerList.map(item => {
                 return item.address
@@ -374,7 +380,9 @@ let Socket = class {
             publicData.pubKeyCombined = publicKeyCombineData.pubKeyCombined
             publicData.pubKeyParity = publicKeyCombineData.pubKeyParity
 
-            //Step 2: Get the private signing session (communication round 1)
+            // Step 2: Get the private signing session (communication round 1)
+            // Step 3: Exchange commitments
+            // Step 4: Get nonces
             let signerPrivateData = []
             for (let i = 0; i < peerList.length; i++) {
                 let sign = null
@@ -393,21 +401,17 @@ let Socket = class {
                         data: {
                             addressArr: addressArr,
                             hash: hash,
-                            idx: i
+                            idx: i,
+                            chainId: chainId
                         }
                     })
-                    if (signRes.code === 0 || !signRes.data) throw new Error(`Other peer failed to sign`)
+                    if (signRes.code === 0 || !signRes.data) throw new Error(`Other peer failed to sign. ${signRes.msg}`)
                     sign = {
                         nonce: Buffer.from(signRes.data.nonce),
                         commitment: Buffer.from(signRes.data.commitment)
                     }
                 }
                 signerPrivateData[i] = sign
-            }
-
-            // Step 3: Exchange commitments
-            // Step 4: Get nonces
-            for (let i = 0; i < publicData.pubKeys.length; i++) {
                 publicData.commitments[i] = signerPrivateData[i].commitment;
                 publicData.nonces[i] = signerPrivateData[i].nonce;
             }
@@ -426,10 +430,12 @@ let Socket = class {
                         type: 'GetTxSign',
                         data: {
                             nonceCombined: publicData.nonceCombined,
-                            hash: hash
+                            hash: hash,
+                            combinedNonceParity: signerSession.combinedNonceParity,
+                            chainId: chainId
                         }
                     })
-                    if (partialSignatureRes.code === 0 || !partialSignatureRes.data) throw new Error(`Other peer failed to partial sign`)
+                    if (partialSignatureRes.code === 0 || !partialSignatureRes.data) throw new Error(`Other peer failed to partial sign. ${partialSignatureRes.msg}`)
                     partialSignature = BigInteger.fromBuffer(partialSignatureRes.data)
                 }
                 if (!partialSignature) throw new Error(`Get partial signature failed`)

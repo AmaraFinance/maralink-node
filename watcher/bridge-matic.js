@@ -12,11 +12,11 @@ if (process.env.NODE_ENV === 'production') {
     }
 } else {
     var chainConfig = {
-        contractAddress: "0x7B3615C6711D98e4F5BA4f532f8C636bEff194Fd",
-        chainAddress: "https://rpc-mumbai.maticvigil.com/v1/eae994f0a9aa91c7289dd77819d2d00654b7b1db",
+        contractAddress: "0xd8c890eE48851fF82e4c5312AD81FAf88e79B27d",
+        chainAddress: "https://rpc-mumbai.maticvigil.com/",
         tokenList: [
             {
-                address: "0x0797Da427E8a14D70B5D623f5084b12B95e53739",
+                address: "0x07FC67b30f04ce2b003f6660C5B62adCa7759Dce",
                 decimals: 8,
                 symbol: "LL"
             }
@@ -57,9 +57,6 @@ let Watcher = class {
                 crossType: crossType
             }, event)
         });
-        setTimeout(()=>{
-            this.getTransaction("0xd8a332f9f8e1ba3f35d53badec3e749cc75a9b55eb80614c0ec071a7a5c1bacd")
-        })
     }
 
     async #findNewTransaction(data, event) {
@@ -82,7 +79,6 @@ let Watcher = class {
     }
 
     async #handlerLockTx(data, event) {
-        util.log('msg', `${this.chainName} Get new transaction. crossChain: ${data.fromChainId}-${data.toChainId} hash: ${event.transactionHash}`)
         let toChainWatcher = this._parent.listeners[data.toChainId];
         let amount = await this.#getAmount(data.amount, data.fromToken, data.targetToken, data.toChainId)
         if (!amount) throw new Error(`Conversion quantity failed`)
@@ -102,7 +98,12 @@ let Watcher = class {
             type: 2
         }
 
+        let currentRoundMaster = await this._leader.getCurrentRoundMaster()
+        if (!currentRoundMaster || currentRoundMaster[0].peer.toLowerCase() !== this._account.address.substr(2).toLowerCase()) return false
+
+        util.log('msg', `${this.chainName} Get new transaction. crossChain: ${data.fromChainId}-${data.toChainId} hash: ${event.transactionHash}`)
         util.log('msg', newTransaction)
+        await blockChain.writeTempBlock(newTransaction)
         this._leader.taskController.enqueue(newTransaction)
     }
 
@@ -115,36 +116,9 @@ let Watcher = class {
             transactionHash: data.message
         })
         if (!task) return false
-        this._leader.taskController.update(task, {done: true})
         this._leader.taskController.remove(task.uuid)
         util.log('msg', `${this.chainName} remove task uuid ${task.uuid}`)
-
-        //write to database
-        let block = {
-            OriginContract: task.fromContract,
-            TargetContract: task.targetContract,
-            TargetToken: task.targetToken,
-            OriginTransactionHash: data.message,
-            TargetTransactionHash: event.transactionHash,
-            FromChainId: task.fromChainId,
-            ToChainId: task.toChainId,
-            From: task.fromAddress,
-            To: task.toAddress,
-            Amount: task.amount,
-            Timestamp: Date.now(),
-            Node: data.fromAddress
-        }
-        await blockChain.writeBlock(block)
-
-        //broadcast to others peer
-        await this._leader.newServer.broadcast({
-            type: "sureTx",
-            data: {
-                targetHash: event.transactionHash,
-                fromChainId: data.fromChainId,
-                toChainId: data.toChainId
-            }
-        })
+        await this.recordAndBroadcastTask(task)
     }
 
     async #getAmount(amount, fromAddress, toAddress, toChainId) {
@@ -211,7 +185,7 @@ let Watcher = class {
                 publicKey: this._account.publicKey
             })
 
-            let sign = await this._leader.newServer.signTransaction(peerList, tx.transactionHash)
+            let sign = await this._leader.newServer.signTransaction(peerList, tx.transactionHash, this.chainId)
             if (!sign) throw new Error(`Sign error hash: ${tx.transactionHash}`)
             let result = await this.contract.mint(sign.addressArr, sign.message, sign.signature, tx.targetToken, tx.amount, tx.toAddress, tx.fromChainId)
             return result.hash
@@ -219,6 +193,38 @@ let Watcher = class {
             util.log('err', `${this.chainName} sendToContract ${e}`)
             return false;
         }
+    }
+
+    async recordAndBroadcastTask(task) {
+        //remove from taskList
+        this._leader.taskController.remove(task.uuid)
+
+        //write to database
+        let block = {
+            OriginContract: task.fromContract,
+            TargetContract: task.targetContract,
+            TargetToken: task.targetToken,
+            OriginTransactionHash: task.transactionHash,
+            TargetTransactionHash: task.targetHash,
+            FromChainId: task.fromChainId,
+            ToChainId: task.toChainId,
+            From: task.fromAddress,
+            To: task.toAddress,
+            Amount: task.amount,
+            Timestamp: Date.now(),
+            Node: this._account.address
+        }
+        await blockChain.writeBlock(block)
+
+        //broadcast to others peer
+        // await this._leader.newServer.broadcast({
+        //     type: "sureTx",
+        //     data: {
+        //         targetHash: task.targetHash,
+        //         fromChainId: task.fromChainId,
+        //         toChainId: task.toChainId
+        //     }
+        // })
     }
 }
 
