@@ -5,14 +5,18 @@ var ethers = require('ethers');
 var crypto = require('crypto');
 
 async function initNode() {
-    let initNode = await this.InitNodeAccount()
-    if (initNode) {
-        global.NODE_ID = initNode.address;
-        global.NODE_INFO = initNode;
-
-        util.log('msg', initNode)
+    try {
+        let initNode = await this.InitNodeAccount()
+        if (initNode) {
+            util.log('info', initNode)
+            return initNode
+        }
+        return false
+    } catch (e) {
+        util.log("fatal", `Init account error`)
+        util.log("fatal", e)
+        return false
     }
-    return initNode
 }
 
 async function InitNodeAccount() {
@@ -27,7 +31,7 @@ async function InitNodeAccount() {
             content.privateKey = content.privateKey.substr(0, 2).toLowerCase() === '0x' ? content.privateKey : '0x' + content.privateKey
             if (!content.hasOwnProperty('privateKey') || !content.publicKey || content.length > 68) {
                 var wallet = new ethers.Wallet(content.privateKey);
-                console.log("Address: " + wallet.address);
+                util.log("debug", "Address: " + wallet.address);
                 let result = {
                     privateKey: content.privateKey,
                     publicKey: ethers.utils.computePublicKey(wallet.publicKey, true),
@@ -44,10 +48,10 @@ async function InitNodeAccount() {
     } else {
         var id = crypto.randomBytes(32).toString('hex');
         var privateKey = "0x" + id;
-        console.log("SAVE BUT DO NOT SHARE THIS:", privateKey);
+        util.log("debug", "SAVE BUT DO NOT SHARE THIS:" + privateKey);
 
         var wallet = new ethers.Wallet(privateKey);
-        console.log("Address: " + wallet.address);
+        util.log("debug", "Address: " + wallet.address);
         let result = {
             privateKey: privateKey,
             publicKey: ethers.utils.computePublicKey(wallet.publicKey, true),

@@ -12,7 +12,7 @@ class HttpServer {
         this.app.use(apiRouter);
         this._parent = parent
         http.createServer(this.app).listen(config.httpPort, function () {
-            util.log('msg', 'Http server listening on port ' + config.httpPort)
+            util.log('info', 'Http server listening on port ' + config.httpPort)
         });
     }
 

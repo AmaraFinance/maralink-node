@@ -16,7 +16,6 @@ function getPub(privateKey) {
     // Get public key
     let publicKey = ethUtil.privateToPublic(privateKeyBuffer);
     publicKey = ethUtil.bufferToHex(publicKey);
-    console.log(publicKey);
     return publicKey
     // return ec.keyFromPrivate(privateKey).getPublic('hex').toString()
 }

@@ -7,9 +7,9 @@ const ethers = require('ethers')
 const chainConfig = require("../config/chain-config")
 
 let Watcher = class {
-    chainName = "MATIC"
-    chainId = 3
-    timeout = 120 * 1000
+    chainName = "MOONBEAM"
+    chainId = 4
+    timeout = 340 * 1000
 
     _parent = null
     _leader = null
@@ -174,7 +174,17 @@ let Watcher = class {
         try {
             let sign = await socketUtil.signTransaction(tx.transactionHash)
             if (!sign) throw new Error(`Sign error hash: ${tx.transactionHash}`)
-            let result = await this.contract.mint(sign.message, tx.targetToken, tx.amount, tx.toAddress, tx.fromChainId)
+
+            //Latest method
+            // let result = await this.contract.mint(sign.message, tx.targetToken, tx.amount, tx.toAddress, tx.fromChainId, {type: null})
+
+            //Manually sign and send transactions
+            let rawTx = await this.contract.populateTransaction.mint(sign.message, tx.targetToken, tx.amount, tx.toAddress, tx.fromChainId)
+            rawTx.nonce = await this.wallet.getTransactionCount();
+            rawTx.gasPrice = await this.wallet.getGasPrice()
+            rawTx.gasLimit = (await this.wallet.estimateGas(rawTx)) * 2;
+            let result = await this.wallet.sendTransaction(rawTx)
+
             return result.hash
         } catch (e) {
             util.log('error', `${this.chainName} sendToContract: `)

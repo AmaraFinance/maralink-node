@@ -5,7 +5,7 @@ let TaskList = require("../library/tasklist");
 let Socket = require("../network/socket/socket")
 let Watcher = require('../watcher/index');
 let HttpServer = require('../network/http/http')
-let blockChain = require("./blockChain")
+let blockChain = require("../library/blockChain")
 let taskController = new TaskList(1);
 let watcher = null
 let newServer = null
@@ -13,30 +13,32 @@ let MintStatus = false
 
 class Node {
     neighbours = {};
+    taskController = null
+    accountInfo = null
+    newServer = null
+    watcher = null
 
     constructor() {
-
+        this.taskController = taskController
+        taskController.taskHandle = this.sendToContract
     }
 
     async initVerifyPeer() {
-        this.taskController = taskController
-        taskController.taskHandle = this.sendToContract
-
+        // init account info
         this.accountInfo = await account.initNode();
+        if (!this.accountInfo) process.exit(1)
         this.setNeighbour(this.accountInfo.address.substr(2).toLowerCase())
 
-        //server
-        newServer = Socket.getInstance(this, this.accountInfo)
-        this.newServer = newServer
-        if (config.peers.seed.host) {
-            await this.newServer.connectClient(config.peers.seed.host, config.peers.seed.port)
-        }
+        // socket server
+        this.newServer = Socket.getInstance(this, this.accountInfo)
+        newServer = this.newServer
+        if (config.peers.seed.host) await this.newServer.connectClient(config.peers.seed.host, config.peers.seed.port)
 
         // watcher
-        watcher = Watcher.getInstance(this, this.accountInfo)
-        this.watcher = watcher
+        this.watcher = Watcher.getInstance(this, this.accountInfo)
+        watcher = this.watcher
 
-        //http
+        // http server
         HttpServer.getInstance(this)
 
         // Init temp task
@@ -59,7 +61,7 @@ class Node {
                 }
             })
         } catch (e) {
-            util.log('err', e)
+            util.log('error', e)
         }
     }
 
@@ -76,17 +78,21 @@ class Node {
                 this.taskController.enqueue(task)
             }
         } catch (e) {
-            util.log('err', e)
+            util.log('error', e)
         }
     }
 
-    async getCurrentRoundMaster() {
-        let round = this.currentRound(Date.now() / 1000, 1595431050, 30)
-        let roundInfo = await util.httpGet(`https://drand.cloudflare.com/public/${round}`);
-        if (roundInfo.success) {
-            let randomness = JSON.parse(roundInfo.data).randomness;
+    async getCurrentRoundMaster(timestamp = Date.now()) {
+        let round = this.currentRound(timestamp / 1000, 1595431050, 30)
+        let roundInfo = await util.raceHTTPGet([
+            `https://drand.cloudflare.com/public/${round}`,
+            `https://api.drand.sh/public/${round}`,
+            `https://api2.drand.sh/public/${round}`,
+            `https://api3.drand.sh/public/${round}`
+        ]);
+        if (roundInfo) {
+            let randomness = JSON.parse(roundInfo).randomness;
             let peers = this.getClosestNeighbours(randomness)
-            // console.log(peers);
             return peers
         }
         return false
@@ -159,10 +165,18 @@ class Node {
                     //Execute p2p task
                     break;
                 case 2:
-                    util.log('msg', `Start processing task. uuid:${task.uuid}. transactionHash: ${task.transactionHash}. fromChainId:${task.fromChainId}. toChainId:${task.toChainId}`)
-                    if (!watcher || !watcher.listeners.hasOwnProperty(task.toChainId)) return taskController.resume(task.uuid)
+                    util.log('info', `Start processing task. uuid:${task.uuid}. transactionHash: ${task.transactionHash}. fromChainId:${task.fromChainId}. toChainId:${task.toChainId}`)
+                    if (!watcher || !watcher.listeners.hasOwnProperty(task.toChainId) || !watcher.listeners.hasOwnProperty(task.fromChainId)) {
+                        return taskController.resume(task.uuid)
+                    }
+                    if (!await watcher.listeners[task.fromChainId].checkConfirmed(task.transactionHash)) {
+                        return taskController.resume(task.uuid)
+                    }
+
                     let hash = await watcher.listeners[task.toChainId].sendToContract(task)
-                    if (!hash) return taskController.resume(task.uuid)
+                    if (!hash) {
+                        return taskController.resume(task.uuid)
+                    }
 
                     taskController.update(task.uuid, {targetHash: hash, done: true})
                     await blockChain.updateTempBlock(task.fromChainId, task.transactionHash, {
@@ -186,34 +200,13 @@ class Node {
                             targetHash: hash
                         }
                     })
-                    util.log('msg', `Task uuid: ${task.uuid} hash: ${hash}`)
+                    util.log('info', `${watcher.listeners[task.toChainId].chainName} Successfully sent transaction hash: ${hash}. Task uuid: ${task.uuid}`)
                     break;
             }
             MintStatus = false
         } catch (e) {
-            util.log('err', e)
+            util.log('error', e)
             MintStatus = false
-        }
-    }
-
-    async getVerifyPeers() {
-        try {
-            let res = await util.httpGet(config.peers.originUrl)
-            if (!res.success) {
-                return false
-            }
-
-            let peers = JSON.parse(res.data)
-            peers.map((v) => {
-                let address = v.substr(2).toLowerCase()
-                if (!this.neighbours.hasOwnProperty(address)) {
-                    this.setNeighbour(address);
-                }
-            })
-            // console.log(peers)
-        } catch (e) {
-            util.log('err', e)
-            return false
         }
     }
 
@@ -229,7 +222,7 @@ class Node {
             })
             return peerList
         } catch (e) {
-            util.log('err', e)
+            util.log('error', e)
             return false
         }
     }

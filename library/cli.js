@@ -1,6 +1,5 @@
 const util = require('../util/util')
-const common = require('../core/util/common')
-const listen = require('../core/listen')
+const common = require('../util/common')
 
 function cli(vorpal) {
     vorpal
@@ -67,19 +66,6 @@ function getGlobalCommand(vorpal) {
         .action(function (args, callback) {
             try {
                 console.log(global[args.options.name])
-            } catch (e) {
-                util.log("err", e)
-            }
-            callback()
-        })
-}
-
-function stopMintCommand(vorpal) {
-    vorpal
-        .command('stopMint', 'Stop listen contract logs')
-        .action(async function (args, callback) {
-            try {
-                await listen.stopListen()
             } catch (e) {
                 util.log("err", e)
             }

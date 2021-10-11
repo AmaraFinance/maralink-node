@@ -5,6 +5,7 @@ const BigInteger = require('bigi');
 const randomBytes = require('random-bytes');
 const randomBuffer = (len) => Buffer.from(randomBytes.sync(len));
 const math = require('bip-schnorr').math
+let util = require("../util/util")
 
 exports.publicKeyCombine = (pubKeys) => {
     try {
@@ -19,7 +20,7 @@ exports.publicKeyCombine = (pubKeys) => {
             pubKeyParity: pubKeyParity
         }
     } catch (e) {
-        console.error(e)
+        util.log("error", e)
         return null
     }
 }
@@ -41,7 +42,7 @@ exports.signByPrivate = (publicData, idx, privateKey) => {
         );
         return signerSession
     } catch (e) {
-        console.error(e)
+        util.log("error", e)
         return false
     }
 }

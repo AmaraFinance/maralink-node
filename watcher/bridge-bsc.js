@@ -1,28 +1,10 @@
 let util = require('../util/util')
 let ioUtil = require('../library/ioUtil')
-let blockChain = require('../core/blockChain')
+let socketUtil = require('../network/socket/socket-util')
+let blockChain = require('../library/blockChain')
 const BN = require('bn.js');
 const ethers = require('ethers')
-
-if (process.env.NODE_ENV === 'production') {
-    var chainConfig = {
-        contractAddress: "",
-        chainAddress: "",
-        tokenList: []
-    }
-} else {
-    var chainConfig = {
-        contractAddress: "0xC169423A105e290F9beE1588773a1C292D2b5D16",
-        chainAddress: "https://data-seed-prebsc-1-s3.binance.org:8545/",
-        tokenList: [
-            {
-                address: "0xE3E399Ce433CA06d3A12d8acC3651d90B43E898B",
-                decimals: 8,
-                symbol: "LL"
-            }
-        ]
-    }
-}
+const chainConfig = require("../config/chain-config")
 
 let Watcher = class {
     chainName = "BSC"
@@ -32,19 +14,27 @@ let Watcher = class {
     _parent = null
     _leader = null
     _account = {}
+    _tempTask = {}
 
     constructor(leader, parent, account) {
         this._leader = leader
         this._parent = parent
         this._account = account
 
-        this.config = chainConfig
+        this.config = chainConfig[this.chainId]
         this.contractAbi = ioUtil.readFileSync(`${__dirname}/lock.abi.json`, 'utf8')
-        this.provider = new ethers.providers.JsonRpcProvider(this.config.chainAddress)
+        if (!this.config.chainAddress || !this.config.contractAddress) {
+            util.log("error", `${this.chainName}: Configuration missing parameters`)
+            process.exit(1)
+        }
+        this.provider = new ethers.providers.JsonRpcProvider(this.config.chainAddress, this.config.chainId)
         this.wallet = new ethers.Wallet(this._account.privateKey.substr(2), this.provider)
         this.contract = new ethers.Contract(this.config.contractAddress, this.contractAbi, this.wallet)
 
+        util.log("info", `${this.chainName} watcher has started, listening address: ${this.config.contractAddress}`)
         this.contract.on("Cross2", (crossData, crossType, event) => {
+            util.log("trace", `${this.chainName}: `)
+            util.log("trace", crossData)
             this.#findNewTransaction({
                 fromChainId: crossData[1].toNumber(),
                 toChainId: crossData[2].toNumber(),
@@ -54,6 +44,7 @@ let Watcher = class {
                 from: crossData[6],
                 received: crossData[7],
                 message: crossData[8],
+                timestamp: crossData[10].toNumber() * 1000,
                 crossType: crossType
             }, event)
         });
@@ -74,11 +65,14 @@ let Watcher = class {
                     break;
             }
         } catch (e) {
-            util.log('err', `${this.chainName} findNewTransaction ${e}`)
+            util.log('error', `${this.chainName} findNewTransaction: `)
+            util.log('error', e)
         }
     }
 
     async #handlerLockTx(data, event) {
+        util.log('debug', `${this.chainName} Listen origin chain logs ${JSON.stringify(data)}`)
+
         let toChainWatcher = this._parent.listeners[data.toChainId];
         let amount = await this.#getAmount(data.amount, data.fromToken, data.targetToken, data.toChainId)
         if (!amount) throw new Error(`Conversion quantity failed`)
@@ -97,18 +91,11 @@ let Watcher = class {
             timeout: toChainWatcher.timeout || 30 * 1000,
             type: 2
         }
-
-        let currentRoundMaster = await this._leader.getCurrentRoundMaster()
-        if (!currentRoundMaster || currentRoundMaster[0].peer.toLowerCase() !== this._account.address.substr(2).toLowerCase()) return false
-
-        util.log('msg', `${this.chainName} Get new transaction. crossChain: ${data.fromChainId}-${data.toChainId} hash: ${event.transactionHash}`)
-        util.log('msg', newTransaction)
-        await blockChain.writeTempBlock(newTransaction)
-        this._leader.taskController.enqueue(newTransaction)
+        await this.recordAndBroadcastTemp(newTransaction, data.timestamp)
     }
 
     async #handlerMintTx(data, event) {
-        util.log('msg', `${this.chainName} Listen target chain logs ${JSON.stringify(data)}`)
+        util.log('debug', `${this.chainName} Listen target chain logs ${JSON.stringify(data)}`)
 
         let task = this._leader.taskController.find({
             fromChainId: data.fromChainId,
@@ -116,7 +103,7 @@ let Watcher = class {
             transactionHash: data.message
         })
         if (!task) return false
-        util.log('msg', `${this.chainName} remove task uuid ${task.uuid}`)
+        util.log('info', `${this.chainName} remove task uuid ${task.uuid}`)
         await this.recordAndBroadcastTask(task)
     }
 
@@ -133,11 +120,18 @@ let Watcher = class {
             let targetDecimal = new BN(Math.pow(10, targetToken.decimals).toString(), 10)
 
             amount = new BN(amount.toString(), 10)
-            amount = amount.mul(targetDecimal).div(originDecimal).toString()
+            amount = amount.mul(targetDecimal).div(originDecimal)
+            let fee = new BN(parseInt((targetToken.fee * Math.pow(10, targetToken.decimals))).toString(), 10);
+            if (fee.lt(amount)) {
+                amount = amount.sub(fee)
+            } else {
+                throw new Error(`Does not meet the handling fee setting, do not apply for transfer. fromAddress: ${fromAddress}`)
+            }
 
-            return amount
+            return amount.toString()
         } catch (e) {
-            util.log('err', `${this.chainName} getAmount ${e}`)
+            util.log('error', `${this.chainName} getAmount: `)
+            util.log('error', e)
             return false
         }
     }
@@ -148,7 +142,8 @@ let Watcher = class {
             if (!token) token = this.config.tokenList.find((i) => i.symbol === str)
             return token || null
         } catch (e) {
-            util.log('err', `${this.chainName} getTokenInfo ${e}`)
+            util.log('error', `${this.chainName} getTokenInfo: `)
+            util.log('error', e)
             return null
         }
     }
@@ -170,28 +165,87 @@ let Watcher = class {
             })
             return newTx;
         } catch (e) {
-            util.log('err', e)
+            util.log('error', e)
             return null;
         }
     }
 
     async sendToContract(tx) {
         try {
-            let peerList = await this._leader.getVerifyPeerList()
-            if (!peerList) throw new Error(`Failed to get verification peer`)
-            peerList.push({
-                address: this._account.address,
-                publicKey: this._account.publicKey
-            })
-
-            let sign = await this._leader.newServer.signTransaction(peerList, tx.transactionHash, this.chainId)
+            let sign = await socketUtil.signTransaction(tx.transactionHash)
             if (!sign) throw new Error(`Sign error hash: ${tx.transactionHash}`)
-            let result = await this.contract.mint(sign.addressArr, sign.message, sign.signature, tx.targetToken, tx.amount, tx.toAddress, tx.fromChainId)
+            let result = await this.contract.mint(sign.message, tx.targetToken, tx.amount, tx.toAddress, tx.fromChainId)
             return result.hash
         } catch (e) {
-            util.log('err', `${this.chainName} sendToContract ${e}`)
+            util.log('error', `${this.chainName} sendToContract: `)
+            util.log('error', e)
             return false;
         }
+    }
+
+    async checkConfirmed(hash) {
+        try {
+            let tx = await this.provider.getTransaction(hash)
+            if (tx.confirmations < this.config.confirmBlocks) {
+                throw `The minimum number of confirmed blocks has not been exceeded. Now confirm blocks ${tx.confirmations} target ${this.config.confirmBlocks}`;
+            }
+            return true;
+        } catch (e) {
+            util.log('error', `${this.chainName} checkConfirmed: `)
+            util.log('error', e)
+            return false;
+        }
+    }
+
+    async addToTempTask(transactionHash) {
+        try {
+            if (this._tempTask.hasOwnProperty(transactionHash)) return false
+            let that = this
+            this._tempTask[transactionHash] = setTimeout(() => {
+                delete that._tempTask[transactionHash]
+            }, 600 * 1000)
+        } catch (e) {
+            util.log('error', e)
+        }
+    }
+
+    async recordAndBroadcastTemp(task, timestamp) {
+        if (this._tempTask.hasOwnProperty(task.transactionHash)) return false
+        let currentRoundMaster = await this._leader.getCurrentRoundMaster(timestamp)
+        if (!currentRoundMaster) return false
+
+        if (currentRoundMaster[0].peer.toLowerCase() !== this._account.address.substr(2).toLowerCase()) {
+            // let sockets = await this._leader.newServer.findClient(`0x${currentRoundMaster[0].peer}`)
+            // if (sockets.server) {
+            //     await this._leader.newServer.send(sockets.server, {
+            //         type: 'receiveLockTx',
+            //         data: {
+            //             task: task,
+            //             blockTime: timestamp
+            //         }
+            //     })
+            // }
+            return false
+        }
+
+        if (this._leader.taskController.find({
+            transactionHash: task.transactionHash,
+            fromChainId: task.fromChainId
+        })) return false
+
+        await blockChain.writeTempBlock(task)
+        this._leader.taskController.enqueue(task)
+        await this._leader.newServer.broadcast({
+            type: "findTx",
+            data: {
+                transactionHash: task.transactionHash,
+                fromChainId: task.fromChainId
+            }
+        })
+
+        util.log('info', `${this.chainName} Get new transaction. crossChain: ${task.fromChainId}-${task.toChainId} hash: ${task.transactionHash}`)
+        util.log('info', task)
+        return true
     }
 
     async recordAndBroadcastTask(task) {

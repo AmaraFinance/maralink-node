@@ -4,6 +4,9 @@ const BN = require('bn.js')
 const request = require('request')
 const abiDecoder = require('abi-decoder'); // NodeJS
 const config = require('../config/config')
+let logger = require("log4js").getLogger("MaraLink")
+logger.level = config.logLevel
+
 const structBlock = {
     OriginContract: "",
     TargetContract: "",
@@ -21,12 +24,26 @@ const structBlock = {
 }
 let util = {
     raceHTTPGet: async function (urls) {
-        for (let index = 0; index < urls.length; index++) {
-            const url = urls[index];
-            let result = await this.httpGet(url);
-            if (result.success) {
-                return result
+        try {
+            const promiseArr = []
+            for (let index = 0; index < urls.length; index++) {
+                const url = urls[index];
+                promiseArr.push(new Promise((resolve, reject) => {
+                    request.get({
+                        url: url
+                    }, function (error, response, body) {
+                        if (!error) {
+                            resolve(body);
+                        } else {
+                            reject(error);
+                        }
+                    });
+                }))
             }
+            return Promise.any(promiseArr)
+        } catch (e) {
+            console.log(e)
+            return false
         }
     },
     httpGet: function (url) {
@@ -35,10 +52,9 @@ let util = {
                 url: url
             }, function (error, response, body) {
                 if (!error) {
-                    // 请求成功的处理逻辑
                     resolve({success: true, data: body});
                 } else {
-                    resolve({success: false, msg: "服务异常！"});
+                    resolve({success: false, msg: "request error"});
                 }
             });
         })
@@ -119,37 +135,25 @@ let util = {
 
     log: function (type, info) {
         switch (type) {
-            case "msg":
-                console.log(`${new Date().toLocaleString()} [MSG]: `, info)
+            case "trace":
+                logger.trace(info)
                 break;
-            case "err":
-                console.error(`${new Date().toLocaleString()} [ERROR]: `, info)
+            case "debug":
+                logger.debug(info)
+                break;
+            case "info":
+                logger.info(info)
+                break;
+            case "warn":
+                logger.warn(info)
+                break;
+            case "error":
+                logger.error(info)
+                break;
+            case "fatal":
+                logger.fatal(info)
                 break;
         }
-    },
-
-    bnGt: function (a, b) {
-        a = new BN(a, 10)
-        b = new BN(b, 10)
-        return a.gt(b);
-    },
-
-    bnGte: function (a, b) {
-        a = new BN(a, 10)
-        b = new BN(b, 10)
-        return a.gte(b);
-    },
-
-    prevHex: function (str) {
-        let number = new BN(str, 10)
-        let next = number.subn(1)
-        return next.toString(10)
-    },
-
-    nextHex: function (str) {
-        let number = new BN(str, 10)
-        let next = number.addn(1)
-        return next.toString(10)
     }
 }
 
