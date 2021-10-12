@@ -56,7 +56,7 @@ async function msgFindTx(that, socket, parameter, callback) {
                 Amount: result.amount
             })
         }
-        util.log("trace",`Find tx chainId: ${parameter.dataset.chainId()} hash: ${parameter.data.hash}. result: ${result}`)
+        util.log("trace",`Find tx chainId: ${parameter.data.chainId} hash: ${parameter.data.hash}. result: ${result}`)
         callback && callback("Not found transaction")
     } catch (e) {
         util.log('error', e)
