@@ -1,19 +1,23 @@
 pragma solidity  ^0.5.16;
 
+import "./Search.sol";
+import "./SafeMath.sol";
+import "./SafeTRC20.sol";
+import "./Math.sol";
 import "./Secp256k1.sol";
 import "./Curve.sol";
-import "./SafeMath.sol";
 // import "./strings.sol";
 
 // pragma experimental ABIEncoderV2;
 
-library SchnorrVerifier {
+contract SchnorrVerifier is Search, Secp256k1, Curve {
     using SafeMath for uint;
-    // using strings for *;
+    // using Secp256k1 for Secp256k1;
+
     struct Point {
         uint256 x; uint256 y;
     }
-    uint256 constant n = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F;
+    // uint256 constant n = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F;
 
     struct Verification {
         Point groupKey;
@@ -33,16 +37,16 @@ library SchnorrVerifier {
 
     // function cmul(Point p, uint256 scalar) public pure returns (uint256, uint256) {
     function cmul(uint256 x, uint256 y, uint256 scalar) public pure returns (uint256, uint256) {
-        return Secp256k1.ecmul(x, y, scalar);
+        return ecmul(x, y, scalar);
     }
 
     function sg(uint256 sig_s) public pure returns (uint256, uint256) {
-        return Secp256k1.ecmul(Secp256k1.getGx(), Secp256k1.getGy(), sig_s);
+        return ecmul(getGx(), getGy(), sig_s);
     }
 
     // function cadd(Point a, Point b) public pure returns (uint256, uint256) {
     function cadd(uint256 ax, uint256 ay, uint256 bx, uint256 by) public pure returns (uint256, uint256) {
-        return Secp256k1.ecadd(ax, ay, bx, by);
+        return ecadd(ax, ay, bx, by);
     }
 
     function g1neg(Point memory p) pure internal returns (Point memory) {
@@ -108,7 +112,7 @@ library SchnorrVerifier {
 
     function getR(uint256 ss, uint256 e, Point memory groupKey) pure internal returns (Point memory) {
         Point memory sG;
-        (sG.x, sG.y) = cmul( Secp256k1.getGx(), Secp256k1.getGy(),  ss );
+        (sG.x, sG.y) = cmul( getGx(), getGy(),  ss );
         Point memory eP;
        
         (eP.x, eP.y) =  cmul( groupKey.x,  groupKey.y, e);
@@ -159,7 +163,6 @@ library SchnorrVerifier {
         public
         returns(bool)
     {
-        bool flag = false;
         Verification memory state;
 
         state.groupKey.x = uint256(groupKeyX);

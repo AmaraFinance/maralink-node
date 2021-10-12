@@ -5,9 +5,7 @@ Taken from https://github.com/jbaylina/ecsol and https://github.com/1Address/ecs
 
 License: GPL-3.0
 */
-
-
-library Secp256k1 {
+contract Secp256k1 {
 
     uint256 constant gx = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798;
     uint256 constant gy = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8;
@@ -15,11 +13,11 @@ library Secp256k1 {
     uint256 constant a = 0;
     uint256 constant b = 7;
 
-    function getGx() external pure returns(uint256) {
+    function getGx() internal pure returns(uint256) {
         return gx;
     }
 
-    function getGy() external pure returns(uint256) {
+    function getGy() internal pure returns(uint256) {
         return gy;
     }
 
@@ -192,7 +190,7 @@ library Secp256k1 {
     function ecadd(
         uint256 x1, uint256 y1,
         uint256 x2, uint256 y2)
-        external
+        internal
         pure
         returns(uint256 x3, uint256 y3)
     {
@@ -204,7 +202,7 @@ library Secp256k1 {
     }
 
     function ecmul(uint256 x1, uint256 y1, uint256 scalar)
-        public
+        internal
         pure
         returns(uint256 x2, uint256 y2)
     {
@@ -216,7 +214,7 @@ library Secp256k1 {
     }
 
     function pointHash( uint256[2] memory point)
-        public
+        internal
         pure
         returns(address)
     {
@@ -224,7 +222,7 @@ library Secp256k1 {
     }
 
     function sbmulAddMul(uint256 s,  uint256[2] memory B, uint256 c)
-        public
+        internal
         pure
         returns(address)
     {
@@ -240,7 +238,7 @@ library Secp256k1 {
     // https://ethresear.ch/t/you-can-kinda-abuse-ecrecover-to-do-ecmul-in-secp256k1-today/2384/9
     //
     function ecmulVerify(uint256 x1, uint256 y1, uint256 scalar, uint256 qx, uint256 qy)
-        public
+        internal
         pure
         returns(bool)
     {
@@ -249,7 +247,7 @@ library Secp256k1 {
     }
 
     function publicKey(uint256 privKey)
-        external
+        internal
         pure
         returns(uint256 qx, uint256 qy)
     {
@@ -257,7 +255,7 @@ library Secp256k1 {
     }
 
     function publicKeyVerify(uint256 privKey, uint256 x, uint256 y)
-        external
+        internal
         pure
         returns(bool)
     {
@@ -265,7 +263,7 @@ library Secp256k1 {
     }
 
     function deriveKey(uint256 privKey, uint256 pubX, uint256 pubY)
-        external
+        internal
         pure
         returns(uint256 qx, uint256 qy)
     {

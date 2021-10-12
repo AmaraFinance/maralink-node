@@ -1,7 +1,7 @@
 pragma solidity ^0.5.16;
 
-library Search {
-    function indexOf(uint[] storage self, uint value)
+contract Search {
+    function indexOf(uint[] memory self, uint value)
         public
         view
         returns (uint)
