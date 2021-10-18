@@ -1,10 +1,11 @@
 module.exports = {
     //bsc
     "1": {
-        confirmBlocks: 200,
+        confirmBlocks: 20,
         contractAddress: "0xd53314c692A870d3969DDe0D913E638cb9E87087",
         chainAddress: "https://data-seed-prebsc-1-s1.binance.org:8545/",
         chainId: 97,
+        fee: 0.01,
         tokenList: [
             {
                 address: "0x337610d27c682E347C9cD60BD4b3b107C9d34dDd",
@@ -22,17 +23,20 @@ module.exports = {
     },
     //eth
     "2": {
-        confirmBlocks: 40,
+        confirmBlocks: 4,
         contractAddress: "",
         chainAddress: "",
+        chainId: 3,
+        fee: 0.5,
         tokenList: []
     },
     //matic
     "3": {
-        confirmBlocks: 200,
-        contractAddress: "0xc8e6d1D495EC776fFD637Bd09BbC1B091081d236",
+        confirmBlocks: 20,
+        contractAddress: "0xEa76fe55CB2497e251cAC4E76cb627d9E10C0be7",
         chainAddress: "https://rpc-mumbai.maticvigil.com/",
         chainId: 80001,
+        fee: 0.01,
         tokenList: [
             {
                 address: "0x58aE10d450eabC0E9cD03C878Ba4c6b0768d7569",
@@ -63,15 +67,22 @@ module.exports = {
                 decimals: 8,
                 symbol: "DOT",
                 fee: 0.1
+            },
+            {
+                address: '0x2A79D0F6e6062fB12041385224643C58B09C8b38',
+                decimals: 18,
+                symbol: "MOVR",
+                fee: 0.01
             }
         ]
     },
     //moonbeam
     "4": {
-        confirmBlocks: 50,
-        contractAddress: "0xDC69A90cDDFc316CD6C35dD6487Fc983A0bF0382",
+        confirmBlocks: 5,
+        contractAddress: "0xfa161aF8A31f934932E98c0aB13F388f87da2071",
         chainAddress: "https://rpc.testnet.moonbeam.network",
         chainId: 1287,
+        fee: 0.01,
         tokenList: [
             {
                 address: "0x0b77D7BDd78b2a4C2c50980968166D99e321DfB6",
@@ -96,14 +107,21 @@ module.exports = {
                 decimals: 18,
                 symbol: "DOT",
                 fee: 0.1
+            }, {
+                address: '0x0F14010E779AE9603756778aF4aEaD35239b41d5',
+                decimals: 18,
+                symbol: 'MATIC',
+                fee: 0.01
             }
         ]
     },
     //moonriver
     "5": {
-        confirmBlocks: 50,
+        confirmBlocks: 5,
         contractAddress: "0x0000000000000000000000000000000000000000",
         chainAddress: "https://rpc.moonriver.moonbeam.network",
+        chainId: 1285,
+        fee: 0.1,
         tokenList: []
     }
 }

@@ -23,7 +23,7 @@ let Watcher = class {
 
         this.config = chainConfig[this.chainId]
         this.contractAbi = ioUtil.readFileSync(`${__dirname}/lock.abi.json`, 'utf8')
-        if (!this.config.chainAddress || !this.config.contractAddress){
+        if (!this.config.chainAddress || !this.config.contractAddress) {
             util.log("error", `${this.chainName}: Configuration missing parameters`)
             process.exit(1)
         }
@@ -109,19 +109,41 @@ let Watcher = class {
 
     async #getAmount(amount, fromAddress, toAddress, toChainId) {
         try {
-            let originToken = await this.getTokenInfo(fromAddress)
-            if (!originToken) throw new Error(`The decimal of the origin token ${fromAddress} is not obtained`)
-            let originDecimal = new BN(Math.pow(10, originToken.decimals).toString(), 10)
-
             if (!this._parent.listeners.hasOwnProperty(toChainId)) return false
-            let targetToken = await this._parent.listeners[toChainId].getTokenInfo(originToken.symbol)
-            if (!targetToken) throw new Error(`The decimal of the target token ${fromAddress} is not obtained`)
-            if (targetToken.address.toLowerCase() !== toAddress.toLowerCase()) throw new Error(`ToAddress not match ${targetToken.address} - ${toAddress}`)
-            let targetDecimal = new BN(Math.pow(10, targetToken.decimals).toString(), 10)
+            let targetChainWatcher = this._parent.listeners[toChainId]
+            let originDecimal,
+                targetDecimal,
+                targetFee
+            if (fromAddress.toLowerCase() === '0x0000000000000000000000000000000000000000') {
+                originDecimal = new BN(Math.pow(10, 18).toString(), 10)
 
+                if (toAddress.toLowerCase() === '0x0000000000000000000000000000000000000000') throw new Error(`Target token cannot be 0x00. ${fromAddress} - ${toAddress}`)
+                let targetToken = await targetChainWatcher.getTokenInfo(toAddress)
+                if (!targetToken) throw new Error(`The decimal of the target token ${toAddress} is not obtained`)
+
+                targetFee = targetToken.fee
+                targetDecimal = targetToken.decimals
+
+            } else {
+                let originToken = await this.getTokenInfo(fromAddress)
+                if (!originToken) throw new Error(`The decimal of the origin token ${fromAddress} is not obtained`)
+                originDecimal = new BN(Math.pow(10, originToken.decimals).toString(), 10)
+
+                if (toAddress.toLowerCase() === '0x0000000000000000000000000000000000000000') {
+                    targetFee = targetChainWatcher.config.fee
+                    targetDecimal = 18
+                } else {
+                    let targetToken = targetChainWatcher.getTokenInfo(toAddress)
+                    if (!targetToken) throw new Error(`The decimal of the target token ${toAddress} is not obtained`)
+                    targetFee = targetToken.fee
+                    targetDecimal = targetToken.decimals
+                }
+            }
+
+            let targetDecimalBn = new BN(Math.pow(10, targetDecimal).toString(), 10)
             amount = new BN(amount.toString(), 10)
-            amount = amount.mul(targetDecimal).div(originDecimal)
-            let fee = new BN(parseInt((targetToken.fee * Math.pow(10, targetToken.decimals))).toString(), 10);
+            amount = amount.mul(targetDecimalBn).div(originDecimal)
+            let fee = new BN(parseInt(targetFee * Math.pow(10, targetDecimal)).toString(), 10);
             if (fee.lt(amount)) {
                 amount = amount.sub(fee)
             } else {
@@ -182,7 +204,7 @@ let Watcher = class {
             let rawTx = await this.contract.populateTransaction.mint(sign.message, tx.targetToken, tx.amount, tx.toAddress, tx.fromChainId)
             rawTx.nonce = await this.wallet.getTransactionCount();
             rawTx.gasPrice = await this.wallet.getGasPrice()
-            rawTx.gasLimit = (await this.wallet.estimateGas(rawTx)) * 2;
+            rawTx.gasLimit = await this.wallet.estimateGas(rawTx);
             let result = await this.wallet.sendTransaction(rawTx)
 
             return result.hash

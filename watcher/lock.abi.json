@@ -190,6 +190,11 @@
     "type": "event"
   },
   {
+    "payable": true,
+    "stateMutability": "payable",
+    "type": "fallback"
+  },
+  {
     "constant": true,
     "inputs": [],
     "name": "_admin",
@@ -768,8 +773,8 @@
     "constant": false,
     "inputs": [
       {
-        "internalType": "contract CrossFactory",
-        "name": "crossFactory",
+        "internalType": "contract CrossDelegate",
+        "name": "crossDelegate",
         "type": "address"
       }
     ],
@@ -1073,6 +1078,47 @@
         "type": "bool"
       }
     ],
+    "payable": true,
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "message",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "address",
+        "name": "targetToken",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address payable",
+        "name": "received",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "fromChainId",
+        "type": "uint256"
+      }
+    ],
+    "name": "mint",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "success",
+        "type": "bool"
+      }
+    ],
     "payable": false,
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1138,39 +1184,18 @@
     "constant": false,
     "inputs": [
       {
-        "internalType": "bytes32",
-        "name": "message",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "address",
-        "name": "targetToken",
+        "internalType": "address payable",
+        "name": "to_",
         "type": "address"
       },
       {
         "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "received",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "fromChainId",
+        "name": "amount_",
         "type": "uint256"
       }
     ],
-    "name": "mint",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "success",
-        "type": "bool"
-      }
-    ],
+    "name": "rescue",
+    "outputs": [],
     "payable": false,
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1194,27 +1219,7 @@
         "type": "uint256"
       }
     ],
-    "name": "rescue",
-    "outputs": [],
-    "payable": false,
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "constant": false,
-    "inputs": [
-      {
-        "internalType": "address payable",
-        "name": "to_",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount_",
-        "type": "uint256"
-      }
-    ],
-    "name": "rescue",
+    "name": "rescueToken",
     "outputs": [],
     "payable": false,
     "stateMutability": "nonpayable",
