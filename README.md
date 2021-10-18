@@ -1,6 +1,6 @@
 # Maralink-node
 
-The Maralink is a cross-chain bridge protocol.This is the code for node version.
+The Maralink is a cross-chain bridge protocol.This is the code for NodeJs version.
 
 # Contributing
 
