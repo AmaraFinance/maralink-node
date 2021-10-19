@@ -133,7 +133,7 @@ let Watcher = class {
                     targetFee = targetChainWatcher.config.fee
                     targetDecimal = 18
                 } else {
-                    let targetToken = targetChainWatcher.getTokenInfo(toAddress)
+                    let targetToken = await targetChainWatcher.getTokenInfo(toAddress)
                     if (!targetToken) throw new Error(`The decimal of the target token ${toAddress} is not obtained`)
                     targetFee = targetToken.fee
                     targetDecimal = targetToken.decimals
