@@ -23,13 +23,31 @@ module.exports = {
         contractAddress: "0x19966C5f9f2324e93998Ab816958E5e1E7FD012A",
         chainAddress: "https://polygon-rpc.com/",
         chainId: 137,
-        fee: 0.1,
+        fee: 1,
         tokenList: [
             {
                 address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
                 decimals: 6,
                 symbol: "USDT",
                 fee: 1
+            },
+            {
+                address: "0x2DF15fe83734455FAF6857a7dD308B3797FbC580",
+                decimals: 18,
+                symbol: "DOT",
+                fee: 0.025
+            },
+            {
+                address: "0xd73d28855A14c617f14030f545C6d664eF1F3213",
+                decimals: 18,
+                symbol: "KSM",
+                fee: 0.01
+            },
+            {
+                address: "0x9268e643A160088D2512b5Ad9FD1BabB84853628",
+                decimals: 18,
+                symbol: "MOVR",
+                fee: 0.01
             }
         ]
     },
@@ -55,6 +73,18 @@ module.exports = {
                 decimals: 6,
                 symbol: "USDT",
                 fee: 1
+            },
+            {
+                address: "0xe7Ff9620c090016Eb644dEdb90ae81Bb5533212a",
+                decimals: 18,
+                symbol: "KSM",
+                fee: 0.01
+            },
+            {
+                address: "0xD102151Fa8E19Bb9A1F61C19e73756c05954c660",
+                decimals: 18,
+                symbol: "DOT",
+                fee: 0.025
             }
         ]
     }
